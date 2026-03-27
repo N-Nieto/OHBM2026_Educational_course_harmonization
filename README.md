@@ -2,7 +2,7 @@
 
 
 
-[Nicolás Nieto](https://github.com/N-Nieto), [Johanna Bayer](https://github.com/likeajumprope), [Gaurav Bhalerao](https://github.com/gvbhalerao591), [Emma Prevot](https://github.com/emmaprevot), [Jacob Turnbull](https://github.com/Jake-Turnbull).
+[Nicolás Nieto](https://github.com/N-Nieto) [✉️](n.nieto@fz-juelich.de), [Johanna Bayer](https://github.com/likeajumprope), [Gaurav Bhalerao](https://github.com/gvbhalerao591), [Emma Prevot](https://github.com/emmaprevot), [Jacob Turnbull](https://github.com/Jake-Turnbull).
 
 [![OHBM](https://img.shields.io/badge/OHBM-2026-EA9500?style=flat-square)](https://www.ohbmbrainmapping.com/) [![Jupyter](https://img.shields.io/badge/Jupyter-Notebooks-F37626?style=flat-square&logo=jupyter&logoColor=white)](https://jupyter.org/)
 ---
