@@ -100,7 +100,9 @@ def load_mri_volume(image_path: Path | str) -> np.ndarray:
         )
 
     data = np.nan_to_num(data, copy=False)
+    # Rotate 180 degrees to match the orientation of the sample image]
     return data
+
 
 
 class MRIImageViewer:
@@ -109,12 +111,16 @@ class MRIImageViewer:
     def __init__(
         self,
         image_path: Path | str,
+        second_image_path: Path | str | None = None,
         *,
         cmap: str = "gray",
         figsize: tuple[int, int] = (6, 6),
     ) -> None:
-        self.image_path = Path(image_path)
-        self.data = load_mri_volume(self.image_path)
+        self.image_paths = [Path(image_path)]
+        if second_image_path is not None:
+            self.image_paths.append(Path(second_image_path))
+
+        self.volumes = [load_mri_volume(path) for path in self.image_paths]
         self.cmap = cmap
         self.figsize = figsize
         self.current_view = "axial"
@@ -150,8 +156,7 @@ class MRIImageViewer:
 
     def _set_view(self, view: str) -> None:
         self.current_view = view
-        axis = VIEW_TO_AXIS[view]
-        max_slice = self.data.shape[axis] - 1
+        max_slice = self._get_slider_max(view)
         middle_slice = max_slice // 2
 
         self.slice_slider.max = max_slice
@@ -178,36 +183,63 @@ class MRIImageViewer:
         if change.get("name") == "value":
             self._render()
 
-    def _get_slice(self) -> np.ndarray:
-        slice_index = self.slice_slider.value
+    def _get_slider_max(self, view: str) -> int:
+        axis = VIEW_TO_AXIS[view]
+        return max(volume.shape[axis] - 1 for volume in self.volumes)
+
+    def _get_volume_slice_index(self, volume: np.ndarray) -> int:
+        axis = VIEW_TO_AXIS[self.current_view]
+        volume_max_slice = volume.shape[axis] - 1
+
+        if self.slice_slider.max == 0 or volume_max_slice == 0:
+            return 0
+
+        normalized_position = self.slice_slider.value / self.slice_slider.max
+        return int(round(normalized_position * volume_max_slice))
+
+    def _get_slice(self, volume: np.ndarray) -> tuple[np.ndarray, int, int]:
+        slice_index = self._get_volume_slice_index(volume)
 
         if self.current_view == "axial":
-            slice_data = self.data[:, :, slice_index]
+            slice_data = volume[:, :, slice_index]
         elif self.current_view == "coronal":
-            slice_data = self.data[:, slice_index, :]
+            slice_data = volume[:, slice_index, :]
         else:
-            slice_data = self.data[slice_index, :, :]
+            slice_data = volume[slice_index, :, :]
 
-        return np.rot90(slice_data)
+
+        return np.rot90(slice_data,k=3,axes = (0,1)), slice_index, volume.shape[VIEW_TO_AXIS[self.current_view]]
 
     def _render(self) -> None:
-        slice_data = self._get_slice()
+        slice_views = [self._get_slice(volume) for volume in self.volumes]
+        ncols = len(slice_views)
 
         with self.output:
             self.output.clear_output(wait=True)
-            fig, ax = plt.subplots(figsize=self.figsize)
-            ax.imshow(slice_data, cmap=self.cmap, origin="lower")
-            ax.set_title(
-                f"{self.current_view.title()} view | "
-                f"slice {self.slice_slider.value + 1}/{self.slice_slider.max + 1}"
-            )
-            ax.axis("off")
+            figure_size = self.figsize
+            if ncols > 1 and figure_size == (6, 6):
+                figure_size = (12, 6)
+
+            fig, axes = plt.subplots(1, ncols, figsize=figure_size, squeeze=False)
+            for ax, (path, (slice_data, slice_index, total_slices)) in zip(
+                axes[0], zip(self.image_paths, slice_views)
+            ):
+                ax.imshow(slice_data, cmap=self.cmap, origin="lower")
+                ax.set_title(
+                    f"{path.name}\n"
+                    f"{self.current_view.title()} view | slice {slice_index + 1}/{total_slices}"
+                )
+                ax.axis("off")
+
+            fig.tight_layout()
             plt.show()
             plt.close(fig)
 
+        file_list = ", ".join(path.name for path in self.image_paths)
+        shape_list = ", ".join(str(volume.shape) for volume in self.volumes)
         self.status.value = (
-            f"<b>File:</b> {self.image_path.name} | "
-            f"<b>Shape:</b> {self.data.shape} | "
+            f"<b>Files:</b> {file_list} | "
+            f"<b>Shapes:</b> {shape_list} | "
             f"<b>View:</b> {self.current_view.title()}"
         )
 
@@ -218,10 +250,9 @@ class MRIImageViewer:
         slice_controls = widgets.HBox([self.prev_button, self.slice_slider, self.next_button])
         return widgets.VBox([view_controls, slice_controls, self.status, self.output])
 
+
     def show(self) -> widgets.VBox:
-        viewer = self.widget()
-        display(viewer)
-        return viewer
+        return self.widget()
 
 
 def show_sample_viewer(
