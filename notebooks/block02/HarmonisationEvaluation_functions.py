@@ -917,3 +917,128 @@ def simulate_longitudinal_batch_data_mixed(
 
     return pd.DataFrame(rows)
 
+def simulate_cross_sectional_harmonization_data(
+    n_subjects=60,
+    n_sites=3,
+    n_features=4,
+    seed=1,
+    feature_names=None,
+    site_names=None,
+    additive_shift=None,
+    multiplicative_scale=None,
+):
+    """
+    Simulate cross-sectional site/batch data with age, subject ID, and feature values.
+
+    Data structure:
+        Subject, Age, Site, Region_1 ... Region_n
+
+    Additive effects:
+        fixed mean shifts by site and feature
+
+    Multiplicative effects:
+        site-specific variance scaling by feature
+    """
+    rng = np.random.default_rng(seed)
+
+    if site_names is None:
+        site_names = [f"Site_{chr(65+i)}" for i in range(n_sites)]
+    if feature_names is None:
+        feature_names = [f"Region_{i+1}" for i in range(n_features)]
+
+    if len(site_names) != n_sites:
+        raise ValueError("len(site_names) must match n_sites")
+    if len(feature_names) != n_features:
+        raise ValueError("len(feature_names) must match n_features")
+
+    additive_shift = additive_shift or {}
+    multiplicative_scale = multiplicative_scale or {}
+
+    # Balanced site allocation, then shuffled
+    sites = np.tile(site_names, int(np.ceil(n_subjects / n_sites)))[:n_subjects]
+    rng.shuffle(sites)
+
+    # Covariate
+    age = rng.normal(loc=65, scale=8, size=n_subjects)
+
+    # Feature-level biology
+    feature_means = np.linspace(1500, 2200, n_features)
+    age_slopes = rng.uniform(-6, 6, size=n_features)  # linear age effects
+
+    # Subject-specific baseline variation
+    subject_baselines = rng.normal(0, 70, size=(n_subjects, n_features))
+
+    rows = []
+    for i in range(n_subjects):
+        row = {
+            "Subject": i + 1,
+            "Age": round(float(age[i]), 1),
+            "Site": sites[i],
+        }
+
+        for j, feat in enumerate(feature_names):
+            site = sites[i]
+
+            true_value = (
+                feature_means[j]
+                + subject_baselines[i, j]
+                + age_slopes[j] * age[i]
+            )
+
+            add = additive_shift.get(site, {}).get(feat, 0.0)
+            scale = multiplicative_scale.get(site, {}).get(feat, 1.0)
+
+            observed = true_value + add + rng.normal(0, 20 * scale)
+            row[feat] = round(float(observed), 1)
+
+        rows.append(row)
+
+    return pd.DataFrame(rows)
+
+def regression_harmonize_site(
+    df,
+    feature_cols,
+    site_col="Site",
+    covariates=("Age", "Timepoint"),
+):
+    """
+    Remove additive site effects using feature-wise linear regression.
+
+    Harmonized value:
+        y_adj = y - site_component + mean(site_component)
+
+    This preserves the covariate effects while removing the estimated site shift.
+    """
+    out = df.copy()
+    model_rows = []
+
+    for feat in feature_cols:
+        cov_terms = []
+        for c in covariates:
+            if c in out.columns:
+                if pd.api.types.is_numeric_dtype(out[c]):
+                    cov_terms.append(c)
+                else:
+                    cov_terms.append(f"C({c})")
+
+        formula = f"{feat} ~ " + " + ".join(cov_terms + [f"C({site_col})"])
+
+        fit = smf.ols(formula, data=out).fit()
+
+        # prediction with and without site
+        formula_no_site = f"{feat} ~ " + " + ".join(cov_terms)
+        fit_no_site = smf.ols(formula_no_site, data=out).fit()
+
+        # harmonized values = fitted values without site + residuals
+        out[f"{feat}_harm"] = fit_no_site.fittedvalues + fit.resid
+
+        model_rows.append({
+            "Feature": feat,
+            "Formula": formula,
+            "Site_pvalue": fit.pvalues[[c for c in fit.pvalues.index if "C(Site)" in c]].min()
+                           if any("C(Site)" in c for c in fit.pvalues.index) else np.nan,
+            "R2": fit.rsquared
+        })
+
+    model_summary = pd.DataFrame(model_rows)
+    return out, model_summary

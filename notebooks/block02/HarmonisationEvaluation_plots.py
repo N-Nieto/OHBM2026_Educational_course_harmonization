@@ -605,3 +605,16 @@ def plot_additive_multiplicative_effects(df, feature_cols=None, batch_col="Site"
     plt.tight_layout()
     plt.show()
     return None
+
+def plot_before_after_by_site(df, feature_cols, site_col="Site"):
+    for feat in feature_cols:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+        sns.boxplot(data=df, x=site_col, y=feat, ax=axes[0])
+        axes[0].set_title(f"Before harmonisation: {feat}")
+
+        sns.boxplot(data=df, x=site_col, y=f"{feat}_harm", ax=axes[1])
+        axes[1].set_title(f"After regression harmonisation: {feat}")
+
+        plt.tight_layout()
+        plt.show()
