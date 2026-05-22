@@ -1,4 +1,4 @@
-# 🧠 OHBM 2026 Educational Course: Data Harmonization in Neuroimaging
+# 🧠 OHBM 2026 Educational Course: Data harmonization for neuroscientific research: Theory, challenges, and applications.
 
 
 
@@ -9,7 +9,7 @@
 
 ## 📋 Overview
 
-Welcome to the official repository for the **OHBM 2026 Educational Course on Data Harmonization**. This course provides a comprehensive, hands-on journey from understanding the fundamental challenges of site effects in neuroimaging data to implementing state-of-the-art harmonization techniques.
+Welcome to the official repository for the **OHBM 2026 Educational Course: Data harmonization for neuroscientific research: Theory, challenges, and applications.**. This course provides a comprehensive, hands-on journey from understanding the fundamental challenges of site effects in neuroimaging data to implementing state-of-the-art harmonization techniques.
 
 ---
 
@@ -36,7 +36,7 @@ The course is organized into four progressive blocks, each containing interactiv
 ├── 📁 notebooks/               # Jupyter notebooks by block
 │   ├── block01_eos/            # Effects of Site Introduction
 │   ├── block02_harmonization/  # Harmonization General
-│   ├── block03_combat/         # Location-Scale Methods
+│   ├── block03_ls/             # Location-Scale Methods
 │   └── block04_advanced/       # Alternatives & Future Directions
 ├── 📁 utils/                   # Helper functions and visualization tools
 ├── 📁 solutions/               # Solutions to exercises
@@ -51,6 +51,6 @@ You can run these notebooks instantly online without any local setup using Binde
 1.  **Click the badge** to launch the Binder environment:
     [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/N-Nieto/OHBM2026_Educational_course_harmonization/HEAD)
 
-2.  **Wait for the environment to build.** This may take a few minutes. Binder is creating a live, interactive server with all the necessary packages and data pre-installed. If the enviroment exist, it will automatically connect.
+2.  **Wait for the environment to build.** This may take a few minutes. Binder is creating a live, interactive server with all the necessary packages and data pre-installed. If the environment exist, it will automatically connect.
 
 3.  **Start exploring!** Once the Jupyter interface loads, navigate to the desired notebook (`*.ipynb` file) and click on it to open and run it.
