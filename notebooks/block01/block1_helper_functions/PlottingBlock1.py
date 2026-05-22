@@ -5,6 +5,10 @@ from __future__ import annotations
 import math
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import ipywidgets as widgets
+from IPython.display import clear_output
 
 
 def get_continuous_covariates(df, batch_col="batch", outcome_col="y"):
@@ -36,8 +40,6 @@ def plot_charts(df, covariate_names, batch_col="batch", outcome_col="y", ncols=3
     -------
     matplotlib.figure.Figure
     """
-    import matplotlib.pyplot as plt
-    import seaborn as sns
 
     if isinstance(covariate_names, str):
         covariate_names = [covariate_names]
@@ -110,23 +112,20 @@ def chart_selector_gui(df, batch_col="batch", outcome_col="y", ncols=3):
     """
     Interactive selector for choosing covariates before plotting.
     """
-    import ipywidgets as widgets
-    from IPython.display import display, clear_output
-    import matplotlib.pyplot as plt
 
-    covariates = get_continuous_covariates(df, batch_col=batch_col, outcome_col=outcome_col)
+    covariates = get_continuous_covariates(
+        df, batch_col=batch_col, outcome_col=outcome_col
+    )
 
     selector = widgets.SelectMultiple(
         options=covariates,
-        value=tuple(covariates[:min(3, len(covariates))]),
+        value=tuple(covariates[: min(3, len(covariates))]),
         description="Covariates",
-        layout=widgets.Layout(width="600px", height="180px")
+        layout=widgets.Layout(width="600px", height="180px"),
     )
 
     plot_button = widgets.Button(
-        description="Plot nomogram",
-        button_style="primary",
-        icon="chart-line"
+        description="Plot nomogram", button_style="primary", icon="chart-line"
     )
 
     output = widgets.Output()
@@ -150,21 +149,19 @@ def chart_selector_gui(df, batch_col="batch", outcome_col="y", ncols=3):
 
     plot_button.on_click(on_plot_clicked)
 
-    ui = widgets.VBox([
-        widgets.HTML("<h3>Nomogram covariate selector</h3>"),
-        selector,
-        plot_button,
-        output
-    ])
+    ui = widgets.VBox(
+        [
+            widgets.HTML("<h3>Nomogram covariate selector</h3>"),
+            selector,
+            plot_button,
+            output,
+        ]
+    )
 
     return ui
 
+
 # percentile_age_chart.py
-
-
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 
 
 def plot_age_percentile_chart(
@@ -259,7 +256,9 @@ def plot_age_percentile_chart(
 
     summary = pd.DataFrame(rows).sort_values("age_center")
     if summary.empty:
-        raise ValueError("Could not compute percentile bins. Try fewer bins or more data.")
+        raise ValueError(
+            "Could not compute percentile bins. Try fewer bins or more data."
+        )
 
     x_grid = np.linspace(d[age_col].min(), d[age_col].max(), 400)
 

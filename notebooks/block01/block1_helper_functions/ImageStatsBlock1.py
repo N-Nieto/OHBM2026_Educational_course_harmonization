@@ -32,20 +32,20 @@ def load_mri_volume(image_path: Path | str) -> np.ndarray:
     data = np.nan_to_num(data, copy=False)
     # Rotate 180 degrees to match the orientation of the sample image]
     return data
+
+
 # Function 1: IntensityHistogram
 def IntensityHistogram(img1, img2):
     """
     Plots the histogram of voxel intensities for each image.
-    
+
     Parameters:
     img1 (numpy array): First MRI image data.
     img2 (numpy array): Second MRI image data.
-    
+
     Returns:
     None: Displays the histogram plot.
     """
-    import matplotlib.pyplot as plt
-    import numpy as np
 
     # Images if images are paths, strings or others, load them using the helper function
 
@@ -54,14 +54,13 @@ def IntensityHistogram(img1, img2):
 
     if isinstance(img2, str):
         img2 = load_mri_volume(img2)
-    
+
     img1 = load_mri_volume(img1)
     img2 = load_mri_volume(img2)
 
-
     # Flatten the images to 1D arrays
     img1_flat = img1.flatten()
-    # Normalise both images (i.e demean and divide by standard deviation) to make them more comparable  
+    # Normalise both images (i.e demean and divide by standard deviation) to make them more comparable
     img1_flat = (img1_flat - np.mean(img1_flat)) / np.std(img1_flat)
     img2_flat = img2.flatten()
     img2_flat = (img2_flat - np.mean(img2_flat)) / np.std(img2_flat)
@@ -69,38 +68,38 @@ def IntensityHistogram(img1, img2):
     # Take only real values (in case of complex numbers from FFT)
     img1_flat = np.real(img1_flat)
     img2_flat = np.real(img2_flat)
-    
+
     # Plot histograms
     plt.figure(figsize=(12, 6))
-    
+
     plt.subplot(1, 2, 1)
-    plt.hist(img1_flat, bins=50, color='blue', alpha=0.7)
-    plt.title('Intensity Histogram - Image 1')
-    plt.xlabel('Voxel Intensity')
-    plt.ylabel('Frequency')
-    
+    plt.hist(img1_flat, bins=50, color="blue", alpha=0.7)
+    plt.title("Normalized Intensity Histogram - Image 1")
+    plt.xlabel("Voxel Intensity")
+    plt.ylabel("Frequency")
+
     plt.subplot(1, 2, 2)
-    plt.hist(img2_flat, bins=50, color='orange', alpha=0.7)
-    plt.title('Intensity Histogram - Image 2')
-    plt.xlabel('Voxel Intensity')
-    plt.ylabel('Frequency')
-    
+    plt.hist(img2_flat, bins=50, color="orange", alpha=0.7)
+    plt.title("Normalized Intensity Histogram - Image 2")
+    plt.xlabel("Voxel Intensity")
+    plt.ylabel("Frequency")
+
     plt.tight_layout()
     plt.show()
+
 
 # Function 2: NonZeroVoxelCount
 def NonZeroVoxelCount(img1, img2):
     """
     Counts the number of non-zero voxels in each image.
-    
+
     Parameters:
     img1 (numpy array): First MRI image data.
     img2 (numpy array): Second MRI image data.
-    
+
     Returns:
     tuple: A tuple containing the count of non-zero voxels for each image (count_img1, count_img2).
     """
-    import numpy as np
 
     # Images if images are paths, strings or others, load them using the helper function
 
@@ -109,7 +108,7 @@ def NonZeroVoxelCount(img1, img2):
 
     if isinstance(img2, str):
         img2 = load_mri_volume(img2)
-    
+
     img1 = load_mri_volume(img1)
     img2 = load_mri_volume(img2)
 
@@ -124,10 +123,11 @@ def NonZeroVoxelCount(img1, img2):
     count_img2 = count_img2 / img2_flat.size
 
     # Print the results
-    print(f"Image 1 - Non-zero voxel count: {count_img1*100:.2f}%")
-    print(f"Image 2 - Non-zero voxel count: {count_img2*100:.2f}%")
+    print(f"Image 1 - Non-zero voxel count: {count_img1 * 100:.2f}%")
+    print(f"Image 2 - Non-zero voxel count: {count_img2 * 100:.2f}%")
 
     return count_img1, count_img2
+
 
 # Dev function, not used in practical, but could be useful for more detailed analysis of the frequency content of the images.
 def FFTSpectra(img1, img2, axis=0):
@@ -198,11 +198,11 @@ def FFTSpectra(img1, img2, axis=0):
 def IntensityRange(img1, img2):
     """
     Compares the minimum and maximum voxel intensities between the two images.
-    
+
     Parameters:
     img1 (numpy array): First MRI image data.
     img2 (numpy array): Second MRI image data.
-    
+
     Returns:
     tuple: A tuple containing the intensity range for each image ((min_img1, max_img1), (min_img2, max_img2)).
     """
@@ -215,12 +215,11 @@ def IntensityRange(img1, img2):
 
     if isinstance(img2, str):
         img2 = load_mri_volume(img2)
-    
+
     img1 = load_mri_volume(img1)
     img2 = load_mri_volume(img2)
 
     # Only take the abs
-
 
     min_img1 = np.min(img1)
     max_img1 = np.max(img1)
@@ -232,16 +231,17 @@ def IntensityRange(img1, img2):
 
     return (min_img1, max_img1), (min_img2, max_img2)
 
+
 # Function 5: CNR and SNR (WIP, no ROI masks provided in sample data, will run in FSLEYES and add some ROI masks to the sample data for testing)
 def CNR_SNR(img1, img2, roi_mask):
     """
     Computes the Contrast-to-Noise Ratio (CNR) and Signal-to-Noise Ratio (SNR) for two images given a region of interest (ROI) mask.
-    
+
     Parameters:
     img1 (numpy array): First MRI image data.
     img2 (numpy array): Second MRI image data.
     roi_mask (numpy array): A binary mask defining the region of interest for CNR/SNR calculation.
-    
+
     Returns:
     tuple: A tuple containing the CNR and SNR values for each image ((CNR_img1, SNR_img1), (CNR_img2, SNR_img2)).
     """
@@ -254,7 +254,7 @@ def CNR_SNR(img1, img2, roi_mask):
 
     if isinstance(img2, str):
         img2 = load_mri_volume(img2)
-    
+
     img1 = load_mri_volume(img1)
     img2 = load_mri_volume(img2)
 
@@ -265,7 +265,11 @@ def CNR_SNR(img1, img2, roi_mask):
 
     snr_img1 = signal_img1 / noise_img1 if noise_img1 > 0 else np.inf
     snr_img2 = signal_img2 / noise_img2 if noise_img2 > 0 else np.inf
-    cnr = abs(signal_img1 - signal_img2) / np.sqrt(noise_img1**2 + noise_img2**2) if (noise_img1 > 0 and noise_img2 > 0) else np.inf
+    cnr = (
+        abs(signal_img1 - signal_img2) / np.sqrt(noise_img1**2 + noise_img2**2)
+        if (noise_img1 > 0 and noise_img2 > 0)
+        else np.inf
+    )
 
     print(f"Image 1 - SNR: {snr_img1:.2f}")
     print(f"Image 2 - SNR: {snr_img2:.2f}")
@@ -312,9 +316,7 @@ def compareIDPs(path):
 
     # Extract scanner/image ID
     idp_df["image_id"] = (
-        idp_df["scanner_name"]
-        .astype(str)
-        .apply(lambda x: x.split("_")[0])
+        idp_df["scanner_name"].astype(str).apply(lambda x: x.split("_")[0])
     )
 
     # Reshape dataframe:
@@ -323,24 +325,14 @@ def compareIDPs(path):
     idp_cols = [col for col in idp_df.columns if col.startswith("T1_FIRST_")]
 
     plot_df = idp_df.melt(
-        id_vars="image_id",
-        value_vars=idp_cols,
-        var_name="IDP",
-        value_name="Value"
+        id_vars="image_id", value_vars=idp_cols, var_name="IDP", value_name="Value"
     )
 
     # Pivot so scanners become columns
-    pivot_df = plot_df.pivot(
-        index="IDP",
-        columns="image_id",
-        values="Value"
-    )
+    pivot_df = plot_df.pivot(index="IDP", columns="image_id", values="Value")
 
     # Plot
-    ax = pivot_df.plot(
-        kind="bar",
-        figsize=(14, 6)
-    )
+    ax = pivot_df.plot(kind="bar", figsize=(14, 6))
 
     plt.title("Comparison of IDP Values by Scanner")
     plt.xlabel("IDP")
@@ -350,4 +342,4 @@ def compareIDPs(path):
     plt.tight_layout()
     plt.show()
 
-    print(pivot_df)
+    # print(pivot_df)

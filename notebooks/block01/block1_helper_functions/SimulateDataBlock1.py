@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import ipywidgets as widgets
+from IPython.display import display, clear_output
 # SimulateDataGUI.py
 
 
 def make_simulator_input_gui():
-    import numpy as np
-    import pandas as pd
-    import ipywidgets as widgets
-    from IPython.display import display, clear_output
+
 
     batch_names = ["Batch1", "Batch2", "Batch3"]
 
@@ -232,7 +231,7 @@ def make_simulator_input_gui():
     )
     output = widgets.Output()
 
-    def on_done():
+    def on_done(_):
         n = int(global_controls["n"].value)
         seed = int(global_controls["seed"].value)
         rng = np.random.default_rng(seed)
