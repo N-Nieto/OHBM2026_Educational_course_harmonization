@@ -18,28 +18,52 @@ def make_simulator_input_gui():
     # Manually set the starting values here
     BATCH_DEFAULTS = {
         "Batch1": {
-            "age_mean": 25.0, "age_sd": 10.0, "age_max": 90.0,
+            "age_mean": 25.0,
+            "age_sd": 10.0,
+            "age_max": 90.0,
             "sex_p": 0.60,
-            "height_mean": 168.0, "height_sd": 8.0, "height_max": 210.0,
-            "weight_mean": 65.0, "weight_sd": 12.0, "weight_max": 180.0,
-            "add_mean": 0.00, "add_sd": 0.05,
-            "multi_mean": 1.00, "multi_shape": 25.0,
+            "height_mean": 168.0,
+            "height_sd": 8.0,
+            "height_max": 210.0,
+            "weight_mean": 65.0,
+            "weight_sd": 12.0,
+            "weight_max": 180.0,
+            "add_mean": 0.00,
+            "add_sd": 0.05,
+            "multi_mean": 1.00,
+            "multi_shape": 25.0,
         },
         "Batch2": {
-            "age_mean": 40.0, "age_sd": 24.0, "age_max": 67.0,
+            "age_mean": 40.0,
+            "age_sd": 24.0,
+            "age_max": 67.0,
             "sex_p": 0.45,
-            "height_mean": 178.0, "height_sd": 9.0, "height_max": 220.0,
-            "weight_mean": 78.0, "weight_sd": 14.0, "weight_max": 200.0,
-            "add_mean": 0.00, "add_sd": 0.05,
-            "multi_mean": 1.00, "multi_shape": 25.0,
+            "height_mean": 178.0,
+            "height_sd": 9.0,
+            "height_max": 220.0,
+            "weight_mean": 78.0,
+            "weight_sd": 14.0,
+            "weight_max": 200.0,
+            "add_mean": 0.00,
+            "add_sd": 0.05,
+            "multi_mean": 1.00,
+            "multi_shape": 25.0,
         },
         "Batch3": {
-            "age_mean": 75.0, "age_sd": 14.0, "age_max": 100.0,
+            "age_mean": 75.0,
+            "age_sd": 14.0,
+            "age_max": 100.0,
             "sex_p": 0.52,
-            "height_mean": 165.0, "height_sd": 4.0, "height_max": 200.0,
-            "weight_mean": 72.0, "weight_sd": 16.0, "weight_max": 190.0,
-            "add_mean": 0.00, "add_sd": 0.05,
-            "multi_mean": 1.00, "multi_shape": 25.0,
+            "height_mean": 165.0,
+            "height_sd": 4.0,
+            "height_max": 200.0,
+            "weight_mean": 72.0,
+            "weight_sd": 16.0,
+            "weight_max": 190.0,
+            "add_mean": 0.00,
+            "add_sd": 0.05,
+            "multi_mean": 1.00,
+            "multi_shape": 25.0,
         },
     }
 
@@ -54,24 +78,80 @@ def make_simulator_input_gui():
     def build_batch_controls(batch_name: str):
         d = BATCH_DEFAULTS[batch_name]
         return {
-            "age_mean": widgets.BoundedFloatText(value=d["age_mean"], min=0.0, max=100.0, step=0.1, description="Age mean"),
-            "age_sd": widgets.BoundedFloatText(value=d["age_sd"], min=0.0, max=50.0, step=0.1, description="Age SD"),
-            "age_max": widgets.BoundedFloatText(value=d["age_max"], min=1.0, max=100.0, step=1.0, description="Age max"),
-
-            "sex_p": widgets.BoundedFloatText(value=d["sex_p"], min=0.0, max=1.0, step=0.01, description="% female"),
-
-            "height_mean": widgets.BoundedFloatText(value=d["height_mean"], min=0.0, max=250.0, step=0.1, description="Ht mean"),
-            "height_sd": widgets.BoundedFloatText(value=d["height_sd"], min=0.0, max=100.0, step=0.1, description="Ht SD"),
-            "height_max": widgets.BoundedFloatText(value=d["height_max"], min=1.0, max=250.0, step=1.0, description="Ht max"),
-
-            "weight_mean": widgets.BoundedFloatText(value=d["weight_mean"], min=0.0, max=300.0, step=0.1, description="Wt mean"),
-            "weight_sd": widgets.BoundedFloatText(value=d["weight_sd"], min=0.0, max=100.0, step=0.1, description="Wt SD"),
-            "weight_max": widgets.BoundedFloatText(value=d["weight_max"], min=1.0, max=400.0, step=1.0, description="Wt max"),
-
-            "add_mean": widgets.BoundedFloatText(value=d["add_mean"], min=-1000.0, max=1000.0, step=0.01, description="Add mean"),
-            "add_sd": widgets.BoundedFloatText(value=d["add_sd"], min=0.0, max=1000.0, step=0.01, description="Add SD"),
-            "multi_mean": widgets.BoundedFloatText(value=d["multi_mean"], min=0.01, max=1000.0, step=0.01, description="Multi mean"),
-            "multi_shape": widgets.BoundedFloatText(value=d["multi_shape"], min=1.01, max=10000.0, step=0.1, description="Multi shape"),
+            "age_mean": widgets.BoundedFloatText(
+                value=d["age_mean"],
+                min=0.0,
+                max=100.0,
+                step=0.1,
+                description="Age mean",
+            ),
+            "age_sd": widgets.BoundedFloatText(
+                value=d["age_sd"], min=0.0, max=50.0, step=0.1, description="Age SD"
+            ),
+            "age_max": widgets.BoundedFloatText(
+                value=d["age_max"], min=1.0, max=100.0, step=1.0, description="Age max"
+            ),
+            "sex_p": widgets.BoundedFloatText(
+                value=d["sex_p"], min=0.0, max=1.0, step=0.01, description="% female"
+            ),
+            "height_mean": widgets.BoundedFloatText(
+                value=d["height_mean"],
+                min=0.0,
+                max=250.0,
+                step=0.1,
+                description="Ht mean",
+            ),
+            "height_sd": widgets.BoundedFloatText(
+                value=d["height_sd"], min=0.0, max=100.0, step=0.1, description="Ht SD"
+            ),
+            "height_max": widgets.BoundedFloatText(
+                value=d["height_max"],
+                min=1.0,
+                max=250.0,
+                step=1.0,
+                description="Ht max",
+            ),
+            "weight_mean": widgets.BoundedFloatText(
+                value=d["weight_mean"],
+                min=0.0,
+                max=300.0,
+                step=0.1,
+                description="Wt mean",
+            ),
+            "weight_sd": widgets.BoundedFloatText(
+                value=d["weight_sd"], min=0.0, max=100.0, step=0.1, description="Wt SD"
+            ),
+            "weight_max": widgets.BoundedFloatText(
+                value=d["weight_max"],
+                min=1.0,
+                max=400.0,
+                step=1.0,
+                description="Wt max",
+            ),
+            "add_mean": widgets.BoundedFloatText(
+                value=d["add_mean"],
+                min=-1000.0,
+                max=1000.0,
+                step=0.01,
+                description="Add mean",
+            ),
+            "add_sd": widgets.BoundedFloatText(
+                value=d["add_sd"], min=0.0, max=1000.0, step=0.01, description="Add SD"
+            ),
+            "multi_mean": widgets.BoundedFloatText(
+                value=d["multi_mean"],
+                min=0.01,
+                max=1000.0,
+                step=0.01,
+                description="Multi mean",
+            ),
+            "multi_shape": widgets.BoundedFloatText(
+                value=d["multi_shape"],
+                min=1.01,
+                max=10000.0,
+                step=0.1,
+                description="Multi shape",
+            ),
         }
 
     # ... keep the rest of your code the same ...
@@ -79,11 +159,20 @@ def make_simulator_input_gui():
     def panel_for_batch(batch_name: str, c: dict):
         grid = widgets.GridBox(
             children=[
-                c["age_mean"], c["age_sd"], c["age_max"],
+                c["age_mean"],
+                c["age_sd"],
+                c["age_max"],
                 c["sex_p"],
-                c["height_mean"], c["height_sd"], c["height_max"],
-                c["weight_mean"], c["weight_sd"], c["weight_max"],
-                c["add_mean"], c["add_sd"], c["multi_mean"], c["multi_shape"],
+                c["height_mean"],
+                c["height_sd"],
+                c["height_max"],
+                c["weight_mean"],
+                c["weight_sd"],
+                c["weight_max"],
+                c["add_mean"],
+                c["add_sd"],
+                c["multi_mean"],
+                c["multi_shape"],
             ],
             layout=widgets.Layout(
                 grid_template_columns="repeat(2, minmax(220px, 1fr))",
@@ -95,15 +184,31 @@ def make_simulator_input_gui():
 
     # Global controls
     global_controls = {
-        "n": widgets.BoundedIntText(value=900, min=3, max=1000000, step=1, description="n"),
+        "n": widgets.BoundedIntText(
+            value=900, min=3, max=1000000, step=1, description="n"
+        ),
         "seed": widgets.IntText(value=42, description="Seed"),
-        "data_mean": widgets.BoundedFloatText(value=0.0, min=-1000.0, max=1000.0, step=0.1, description="Data mean"),
-        "data_sd": widgets.BoundedFloatText(value=1.0, min=0.0, max=1000.0, step=0.1, description="Data SD"),
-        "noise_sd": widgets.BoundedFloatText(value=1.0, min=0.0, max=1000.0, step=0.1, description="Noise SD"),
-        "sex_beta": widgets.BoundedFloatText(value=0.2, min=-1000.0, max=1000.0, step=0.01, description="Sex beta"),
-        "age_beta": widgets.BoundedFloatText(value=-0.3, min=-1000.0, max=1000.0, step=0.01, description="Age beta"),
-        "height_beta": widgets.BoundedFloatText(value=0.4, min=-1000.0, max=1000.0, step=0.01, description="Ht beta"),
-        "weight_beta": widgets.BoundedFloatText(value=-0.1, min=-1000.0, max=1000.0, step=0.01, description="Wt beta"),
+        "data_mean": widgets.BoundedFloatText(
+            value=0.0, min=-1000.0, max=1000.0, step=0.1, description="Data mean"
+        ),
+        "data_sd": widgets.BoundedFloatText(
+            value=1.0, min=0.0, max=1000.0, step=0.1, description="Data SD"
+        ),
+        "noise_sd": widgets.BoundedFloatText(
+            value=1.0, min=0.0, max=1000.0, step=0.1, description="Noise SD"
+        ),
+        "sex_beta": widgets.BoundedFloatText(
+            value=0.2, min=-1000.0, max=1000.0, step=0.01, description="Sex beta"
+        ),
+        "age_beta": widgets.BoundedFloatText(
+            value=-0.3, min=-1000.0, max=1000.0, step=0.01, description="Age beta"
+        ),
+        "height_beta": widgets.BoundedFloatText(
+            value=0.4, min=-1000.0, max=1000.0, step=0.01, description="Ht beta"
+        ),
+        "weight_beta": widgets.BoundedFloatText(
+            value=-0.1, min=-1000.0, max=1000.0, step=0.01, description="Wt beta"
+        ),
     }
 
     batch_controls = {b: build_batch_controls(b) for b in batch_names}
@@ -122,10 +227,12 @@ def make_simulator_input_gui():
     for i, b in enumerate(batch_names):
         tabs.set_title(i, b)
 
-    done_button = widgets.Button(description="Done", button_style="primary", icon="check")
+    done_button = widgets.Button(
+        description="Done", button_style="primary", icon="check"
+    )
     output = widgets.Output()
 
-    def on_done(_):
+    def on_done():
         n = int(global_controls["n"].value)
         seed = int(global_controls["seed"].value)
         rng = np.random.default_rng(seed)
@@ -139,11 +246,13 @@ def make_simulator_input_gui():
 
         # Batch labels
         sizes = equal_batch_sizes(n)
-        batch = np.concatenate([
-            np.repeat(batch_names[0], sizes[0]),
-            np.repeat(batch_names[1], sizes[1]),
-            np.repeat(batch_names[2], sizes[2]),
-        ])
+        batch = np.concatenate(
+            [
+                np.repeat(batch_names[0], sizes[0]),
+                np.repeat(batch_names[1], sizes[1]),
+                np.repeat(batch_names[2], sizes[2]),
+            ]
+        )
 
         covariate_specs = {
             "age": {
@@ -154,33 +263,46 @@ def make_simulator_input_gui():
                 "sd": {
                     b: float(batch_controls[b]["age_sd"].value) for b in batch_names
                 },
-                "clip": (0, float(max(batch_controls[b]["age_max"].value for b in batch_names))),
+                "clip": (
+                    0,
+                    float(max(batch_controls[b]["age_max"].value for b in batch_names)),
+                ),
             },
             "sex": {
                 "dist": "bernoulli",
-                "p": {
-                    b: float(batch_controls[b]["sex_p"].value) for b in batch_names
-                },
+                "p": {b: float(batch_controls[b]["sex_p"].value) for b in batch_names},
             },
             "height": {
                 "dist": "normal",
                 "mean": {
-                    b: float(batch_controls[b]["height_mean"].value) for b in batch_names
+                    b: float(batch_controls[b]["height_mean"].value)
+                    for b in batch_names
                 },
                 "sd": {
                     b: float(batch_controls[b]["height_sd"].value) for b in batch_names
                 },
-                "clip": (0, float(max(batch_controls[b]["height_max"].value for b in batch_names))),
+                "clip": (
+                    0,
+                    float(
+                        max(batch_controls[b]["height_max"].value for b in batch_names)
+                    ),
+                ),
             },
             "weight": {
                 "dist": "normal",
                 "mean": {
-                    b: float(batch_controls[b]["weight_mean"].value) for b in batch_names
+                    b: float(batch_controls[b]["weight_mean"].value)
+                    for b in batch_names
                 },
                 "sd": {
                     b: float(batch_controls[b]["weight_sd"].value) for b in batch_names
                 },
-                "clip": (0, float(max(batch_controls[b]["weight_max"].value for b in batch_names))),
+                "clip": (
+                    0,
+                    float(
+                        max(batch_controls[b]["weight_max"].value for b in batch_names)
+                    ),
+                ),
             },
         }
 
@@ -217,10 +339,16 @@ def make_simulator_input_gui():
                 "n": sizes,
                 "age_mean": [batch_controls[b]["age_mean"].value for b in batch_names],
                 "sex_p": [batch_controls[b]["sex_p"].value for b in batch_names],
-                "height_mean": [batch_controls[b]["height_mean"].value for b in batch_names],
-                "weight_mean": [batch_controls[b]["weight_mean"].value for b in batch_names],
+                "height_mean": [
+                    batch_controls[b]["height_mean"].value for b in batch_names
+                ],
+                "weight_mean": [
+                    batch_controls[b]["weight_mean"].value for b in batch_names
+                ],
                 "add_mean": [batch_controls[b]["add_mean"].value for b in batch_names],
-                "multi_mean": [batch_controls[b]["multi_mean"].value for b in batch_names],
+                "multi_mean": [
+                    batch_controls[b]["multi_mean"].value for b in batch_names
+                ],
             }
         )
 
@@ -231,19 +359,22 @@ def make_simulator_input_gui():
 
     done_button.on_click(on_done)
 
-    ui = widgets.VBox([
-        widgets.HTML("<h3>Simulator input builder</h3>"),
-        widgets.HTML("<b>Global settings</b>"),
-        global_box,
-        widgets.HTML("<b>Batch-specific settings</b>"),
-        tabs,
-        done_button,
-        output,
-    ])
+    ui = widgets.VBox(
+        [
+            widgets.HTML("<h3>Simulator input builder</h3>"),
+            widgets.HTML("<b>Global settings</b>"),
+            global_box,
+            widgets.HTML("<b>Batch-specific settings</b>"),
+            tabs,
+            done_button,
+            output,
+        ]
+    )
 
     make_simulator_input_gui.last_result = None
     display(ui)
     return ui
+
 
 def simulate_batched_data(
     data,
@@ -344,10 +475,12 @@ def simulate_batched_data(
     y_sd = float(np.std(y_base, ddof=1)) if n > 1 else float(np.std(y_base))
     scale_for_add = y_sd if relative_batch_effects else 1.0
 
-    out = pd.DataFrame({
-        "batch": batch,
-        "y_base": y_base,
-    })
+    out = pd.DataFrame(
+        {
+            "batch": batch,
+            "y_base": y_base,
+        }
+    )
 
     # Storage for covariates
     for cov_name in covariate_specs:
@@ -395,7 +528,9 @@ def simulate_batched_data(
                 p = resolve(spec.get("p", 0.5), b, 0.5)
                 p = float(p)
                 if not (0.0 <= p <= 1.0):
-                    raise ValueError(f"Bernoulli probability for '{cov_name}' in '{b}' must be between 0 and 1.")
+                    raise ValueError(
+                        f"Bernoulli probability for '{cov_name}' in '{b}' must be between 0 and 1."
+                    )
                 x = rng.binomial(n=1, p=p, size=n_b)
 
             else:
@@ -437,7 +572,9 @@ def simulate_batched_data(
         if multi_mean <= 0:
             raise ValueError(f"`multi_mean` for batch '{b}' must be > 0.")
         if multi_shape <= 1:
-            raise ValueError(f"`multi_shape` for batch '{b}' must be > 1 for a finite mean.")
+            raise ValueError(
+                f"`multi_shape` for batch '{b}' must be > 1 for a finite mean."
+            )
 
         invgamma_scale = multi_mean * (multi_shape - 1.0)
 
