@@ -1,0 +1,8 @@
+volume,additive_count,multiplicative_count,multiplicative_applied,multiplicative_model_pval
+T1_SIENAX_peripheral_GM_norm_vol,3,0,0,0.321423434235884
+T1_SIENAX_CSF_norm_vol,6,0,0,0.928240314968795
+T1_SIENAX_GM_norm_vol,3,0,0,0.202726358011065
+T1_SIENAX_WM_norm_vol,4,5,1,0.000732009740008865
+T1_SIENAX_brain_norm_vol,3,6,1,0.0474035175618424
+T1_FIRST_left_hippocampus,4,0,0,0.770129940466569
+T1_FIRST_right_hippocampus,6,0,0,0.999443293819983

@@ -1,0 +1,8 @@
+volume,selected_qcs
+T1_SIENAX_peripheral_GM_norm_vol,
+T1_SIENAX_CSF_norm_vol,
+T1_SIENAX_GM_norm_vol,
+T1_SIENAX_WM_norm_vol,QC1;QC2;QC3;QC5;QC6
+T1_SIENAX_brain_norm_vol,QC1;QC2;QC3;QC5;QC6;QC7
+T1_FIRST_left_hippocampus,
+T1_FIRST_right_hippocampus,
