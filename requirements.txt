@@ -6,10 +6,8 @@ statsmodels>=0.14.0
 numpy 
 scipy 
 pandas 
-scikit-learn 
-statsmodels 
+scikit-learn  
 matplotlib 
-seaborn
 antspyx 
 neuroHarmonize
 neuroCombat
