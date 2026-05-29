@@ -16,6 +16,7 @@ def simulate_harmonisation_data(
     subject_mean=1500,
     subject_sd=80,
     noise_sd=20,
+    scale_value=50
 ):
     np.random.seed(seed)
 
@@ -24,7 +25,7 @@ def simulate_harmonisation_data(
     timepoints = [f"TP{i}" for i in range(n_timepoints)]
     sites = [f"Site_{chr(65 + i)}" for i in range(n_timepoints)]  # Site_A, Site_B, ...
 
-    feature_names = [f"Region_{i + 1}" for i in range(n_features)]
+    feature_names = [f"Feature_{i + 1}" for i in range(n_features)]
 
     # subject-specific true values for each feature
     feature_means = np.linspace(subject_mean, subject_mean + 1000, n_features)
@@ -36,7 +37,7 @@ def simulate_harmonisation_data(
     # site-specific bias for each feature
     # each site gets a different shift per feature
     site_bias = {
-        site: np.random.normal(loc=0, scale=50, size=n_features) for site in sites
+        site: np.random.normal(loc=0, scale=scale_value, size=n_features) for site in sites
     }
 
     rows = []
@@ -480,8 +481,6 @@ def _build_input_df_if_needed(
 # Main: AdditiveEffect_long (per-feature zscore behavior)
 # ----------------------------------------
 model_defs_add = []
-
-
 def AdditiveEffect_long(
     data: Optional[pd.DataFrame] = None,
     idp_matrix: Optional[np.ndarray] = None,
@@ -742,12 +741,10 @@ def AdditiveEffect_long(
 
     out = pd.DataFrame(rows)
     out = out.sort_values(by="TestStat", ascending=False).reset_index(drop=True)
-    return out, model_defs_add
+    return out
 
 
 model_defs_mul = []
-
-
 def MultiplicativeEffect_long(
     data: Optional[pd.DataFrame] = None,
     idp_matrix: Optional[np.ndarray] = None,
@@ -1025,7 +1022,7 @@ def MultiplicativeEffect_long(
 
     out = pd.DataFrame(rows)
     out = out.sort_values(by="ChiSq", ascending=False).reset_index(drop=True)
-    return out, model_defs_mul
+    return out
 
 
 def simulate_longitudinal_batch_data_mixed(
@@ -1052,7 +1049,7 @@ def simulate_longitudinal_batch_data_mixed(
     if sites is None:
         sites = [f"Site_{chr(65 + i)}" for i in range(n_sites)]
     if feature_names is None:
-        feature_names = [f"Region_{i + 1}" for i in range(n_features)]
+        feature_names = [f"Feature_{i + 1}" for i in range(n_features)]
 
     additive_shift = additive_shift or {}
     multiplicative_scale = multiplicative_scale or {}
@@ -1134,7 +1131,7 @@ def simulate_cross_sectional_harmonization_data(
     if site_names is None:
         site_names = [f"Site_{chr(65 + i)}" for i in range(n_sites)]
     if feature_names is None:
-        feature_names = [f"Region_{i + 1}" for i in range(n_features)]
+        feature_names = [f"Feature_{i + 1}" for i in range(n_features)]
 
     if len(site_names) != n_sites:
         raise ValueError("len(site_names) must match n_sites")

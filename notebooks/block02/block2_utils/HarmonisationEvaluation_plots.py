@@ -91,7 +91,7 @@ def plot_WithinSubjVar(
 
     # -------- A: Per-IDP boxplots + subject points --------
     sns.boxplot(x="IDP", y="value", data=long, ax=axA, boxprops={"alpha": 0.6})
-    axA.set_title("Per-IDP distribution (subjects)")
+    axA.set_title("Per-feature distribution (subjects)")
     axA.set_xlabel("")
     axA.set_ylabel("WSV (%)")
     axA.set_xticklabels(
@@ -139,7 +139,7 @@ def plot_WithinSubjVar(
     # -------- B: Mean across subjects per IDP --------
     idp_means = df[idps].mean(axis=0)
     sns.boxplot(x=idp_means.values, ax=axB, orient="h", boxprops={"alpha": 0.6})
-    axB.set_title("Per-IDP mean (across subjects)")
+    axB.set_title("Per-feature mean (across subjects)")
     axB.set_yticks([])
 
     show_idp_legend = n_idps <= limit_idps_for_legend
@@ -158,7 +158,7 @@ def plot_WithinSubjVar(
     # -------- C: Mean across IDPs per subject --------
     subj_means = df.set_index(subject_col)[idps].mean(axis=1)
     sns.boxplot(x=subj_means.values, ax=axC, orient="h", boxprops={"alpha": 0.6})
-    axC.set_title("Per-subject mean (across IDPs)")
+    axC.set_title("Per-subject mean (across features)")
     axC.set_yticks([])
 
     show_subject_legend = n_subjects <= limit_subjects
@@ -187,7 +187,6 @@ def plot_WithinSubjVar(
         plt.show()
     return None
 
-
 def plot_SubjectOrder(
     df,
     idp_col="IDP",
@@ -200,6 +199,437 @@ def plot_SubjectOrder(
     ncols=2,
     figsize_per_plot=(4, 4),
     cmap="cividis",
+    fmt=".2f",
+    center=0,
+    vmax_abs=None,
+    cmap_limits=None,
+    limit_idps=None,
+    sample_method="first",  # 'first' or 'random'
+    random_state=None,
+    rep=None,
+    show: bool = False,
+    combine_method: str = "stouffer",  # 'stouffer' or 'fisher'
+    p_correction: str = "fdr_bh",  # 'fdr_bh', 'bonferroni', or None
+):
+    """
+    Extended version of your function that combines p-values across IDPs (for each time-pair)
+    and across time-pairs (for each IDP) using either Stouffer (signed) or Fisher, and optionally
+    applies multiple-testing correction.
+
+    cmap_limits:
+      - If provided, must be [vmin, vmax]
+      - These limits are used for BOTH the heatmaps and the shared colorbar
+      - When cmap_limits is provided, center is ignored for the plots
+    """
+
+    import math
+    import random
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    try:
+        from scipy.stats import combine_pvalues, norm
+    except Exception as e:
+        raise ImportError(
+            "This function requires scipy. Please install scipy (pip install scipy)."
+        ) from e
+
+    from matplotlib.colors import Normalize
+
+    # --- simple BH implementation and Bonferroni ---
+    def bh_adjust(pvals):
+        """Benjamini-Hochberg FDR correction. Returns adjusted p-values (same shape as input)."""
+        p = np.asarray(pvals, dtype=float)
+        flat = p.flatten()
+        nanmask = np.isnan(flat)
+        if np.all(nanmask):
+            return p
+
+        pv = flat[~nanmask]
+        m = pv.size
+
+        order = np.argsort(pv)
+        ranked = np.empty_like(order)
+        ranked[order] = np.arange(m) + 1
+
+        adj_vals = pv * m / ranked
+        adj_sorted = np.empty_like(adj_vals)
+        adj_sorted[order] = adj_vals
+
+        cummin = np.minimum.accumulate(adj_sorted[::-1])[::-1]
+
+        flat_adj = flat.copy()
+        flat_adj[~nanmask] = np.minimum(cummin, 1.0)
+        return flat_adj.reshape(p.shape)
+
+    def bonferroni_adjust(pvals):
+        p = np.asarray(pvals, dtype=float)
+        flat = p.flatten()
+        nanmask = np.isnan(flat)
+        if np.all(nanmask):
+            return p
+
+        pv = flat[~nanmask]
+        m = pv.size
+        adj = np.minimum(pv * m, 1.0)
+
+        flat_adj = flat.copy()
+        flat_adj[~nanmask] = adj
+        return flat_adj.reshape(p.shape)
+
+    def apply_correction(p_matrix, method):
+        if method is None:
+            return p_matrix
+        if method == "fdr_bh":
+            return bh_adjust(p_matrix)
+        elif method == "bonferroni":
+            return bonferroni_adjust(p_matrix)
+        else:
+            raise ValueError("p_correction must be 'fdr_bh', 'bonferroni', or None")
+
+    # ---------- Validate and list IDPs ----------
+    all_idps = sorted(df[idp_col].unique())
+    if len(all_idps) == 0:
+        raise ValueError("No IDPs found in dataframe.")
+
+    if limit_idps is None:
+        idps_to_plot = all_idps.copy()
+    else:
+        if not (isinstance(limit_idps, int) and limit_idps >= 1):
+            raise ValueError("limit_idps must be None or a positive integer.")
+        limit = min(limit_idps, len(all_idps))
+        if sample_method == "first":
+            idps_to_plot = all_idps[:limit]
+        elif sample_method == "random":
+            rng = random.Random(random_state)
+            idps_to_plot = rng.sample(all_idps, limit)
+        else:
+            raise ValueError("sample_method must be 'first' or 'random'.")
+
+    n_idp_plot = len(idps_to_plot)
+
+    # ---------- Determine time ordering ----------
+    if times_order is None:
+        times = sorted(set(df[time_a_col].unique()) | set(df[time_b_col].unique()))
+    else:
+        times = list(times_order)
+
+    n_times = len(times)
+    if n_times == 0:
+        raise ValueError("No time points found.")
+
+    # ---------- Build matrices for ALL IDPs ----------
+    rho_mats_all = {}
+    p_mats_all = {}
+    all_rho_values = []
+
+    for idp in all_idps:
+        sub = df[df[idp_col] == idp].copy()
+        rho = sub.pivot(index=time_a_col, columns=time_b_col, values=rho_col)
+        pmat = sub.pivot(index=time_a_col, columns=time_b_col, values=p_col)
+
+        rho = rho.reindex(index=times, columns=times)
+        pmat = pmat.reindex(index=times, columns=times)
+
+        # symmetrize
+        rho = rho.combine_first(rho.T)
+        pmat = pmat.combine_first(pmat.T)
+        rho = rho.combine_first(rho.T)
+        pmat = pmat.combine_first(pmat.T)
+
+        rho_arr = rho.to_numpy(dtype=float, copy=True)
+        pmat_arr = pmat.to_numpy(dtype=float, copy=True)
+
+        np.fill_diagonal(rho_arr, np.nan)
+        np.fill_diagonal(pmat_arr, np.nan)
+
+        rho_mats_all[idp] = pd.DataFrame(rho_arr, index=times, columns=times)
+        p_mats_all[idp] = pd.DataFrame(pmat_arr, index=times, columns=times)
+
+        all_rho_values.extend(rho_arr[~np.isnan(rho_arr)])
+
+    if len(all_rho_values) == 0:
+        raise ValueError("No numeric SpearmanRho values found.")
+
+    # ---------- Color scale ----------
+    if cmap_limits is not None:
+        if len(cmap_limits) != 2:
+            raise ValueError("cmap_limits must be [vmin, vmax].")
+        vmin, vmax = float(cmap_limits[0]), float(cmap_limits[1])
+        heatmap_center = None
+    else:
+        if vmax_abs is None:
+            vmax_abs = max(
+                abs(np.nanmin(all_rho_values)),
+                abs(np.nanmax(all_rho_values)),
+            )
+        vmin, vmax = -vmax_abs, vmax_abs
+        heatmap_center = center
+
+    color_norm = Normalize(vmin=vmin, vmax=vmax, clip=True)
+
+    # ---------- Summary calculations ----------
+    stacked = np.stack([rho_mats_all[idp].values for idp in all_idps], axis=0)
+    stacked_p = np.stack([p_mats_all[idp].values for idp in all_idps], axis=0)
+
+    tiny = 1e-300
+    sp = stacked_p.copy()
+    sp[sp == 0] = tiny
+
+    combined_p_matrix = np.full((n_times, n_times), np.nan)
+    combined_rho_matrix = np.nanmean(stacked, axis=0)
+
+    if combine_method.lower() == "fisher":
+        for i in range(n_times):
+            for j in range(n_times):
+                pv = sp[:, i, j]
+                pv = pv[~np.isnan(pv)]
+                if pv.size > 0:
+                    _, p_comb = combine_pvalues(pv, method="fisher")
+                    combined_p_matrix[i, j] = p_comb
+
+    elif combine_method.lower() == "stouffer":
+        for i in range(n_times):
+            for j in range(n_times):
+                pv = sp[:, i, j]
+                pv = pv[~np.isnan(pv)]
+                if pv.size > 0:
+                    rhos = stacked[:, i, j]
+                    rhos_nonan = rhos[~np.isnan(rhos)]
+                    if rhos_nonan.size > 0:
+                        mean_rho = np.nanmean(rhos_nonan)
+                        sign_cell = np.sign(mean_rho)
+                        if sign_cell == 0 or np.isnan(sign_cell):
+                            sign_cell = 1.0
+                    else:
+                        sign_cell = 1.0
+
+                    p_clip = np.clip(pv, tiny, 1 - 1e-16)
+                    zs = norm.ppf(1.0 - p_clip / 2.0)
+                    signed_zs = sign_cell * zs
+                    z_comb = np.sum(signed_zs) / math.sqrt(zs.size)
+                    p_comb = 2.0 * (1.0 - norm.cdf(abs(z_comb)))
+                    combined_p_matrix[i, j] = float(np.clip(p_comb, tiny, 1.0))
+    else:
+        raise ValueError("combine_method must be 'stouffer' or 'fisher'")
+
+    combined_p_matrix_adj = apply_correction(combined_p_matrix, p_correction)
+
+    # ---------- Per-IDP combined p ----------
+    idp_combined_ps = []
+    idp_mean_rhos = []
+
+    for idp in all_idps:
+        pmat = p_mats_all[idp].values
+        rho = rho_mats_all[idp].values
+
+        mask = ~np.eye(n_times, dtype=bool)
+        pv = pmat[mask]
+        pv = pv[~np.isnan(pv)]
+        rho_vals = rho[mask]
+        rho_vals = rho_vals[~np.isnan(rho_vals)]
+
+        idp_mean_rhos.append(np.nanmean(rho_vals) if rho_vals.size > 0 else np.nan)
+
+        if pv.size == 0:
+            idp_combined_ps.append(np.nan)
+            continue
+
+        if combine_method.lower() == "fisher":
+            _, p_comb = combine_pvalues(np.clip(pv, tiny, 1.0), method="fisher")
+            idp_combined_ps.append(float(p_comb))
+        else:
+            mean_rho = np.nanmean(rho_vals) if rho_vals.size > 0 else np.nan
+            sign_cell = np.sign(mean_rho)
+            if sign_cell == 0 or np.isnan(sign_cell):
+                sign_cell = 1.0
+
+            p_clip = np.clip(pv, tiny, 1.0 - 1e-16)
+            zs = norm.ppf(1.0 - p_clip / 2.0)
+            signed_zs = sign_cell * zs
+            z_comb = np.sum(signed_zs) / math.sqrt(zs.size)
+            p_comb = 2.0 * (1.0 - norm.cdf(abs(z_comb)))
+            idp_combined_ps.append(float(np.clip(p_comb, tiny, 1.0)))
+
+    idp_combined_ps = np.array(idp_combined_ps, dtype=float)
+
+    if p_correction is not None:
+        idp_combined_ps_adj = apply_correction(
+            idp_combined_ps.reshape(-1, 1), p_correction
+        ).reshape(-1)
+    else:
+        idp_combined_ps_adj = idp_combined_ps.copy()
+
+    # ---------- Mean rho matrix ----------
+    mean_rho_matrix = np.nanmean(stacked, axis=0)
+    np.fill_diagonal(mean_rho_matrix, np.nan)
+
+    # ---------- Figure layout ----------
+    nrows = math.ceil(n_idp_plot / ncols) if n_idp_plot > 0 else 0
+    fig_w = figsize_per_plot[0] * ncols
+    fig_h = max(1, nrows) * figsize_per_plot[1] + 1.6 * figsize_per_plot[1]
+    fig = plt.figure(figsize=(fig_w, fig_h))
+
+    gs = fig.add_gridspec(
+        max(1, nrows) + 2,
+        ncols,
+        height_ratios=[1] * max(1, nrows) + [0.9, 0.9],
+        hspace=0.35,
+        wspace=0.3,
+    )
+
+    # ---------- Plot individual IDPs ----------
+    for idx, idp in enumerate(idps_to_plot):
+        r = idx // ncols
+        c = idx % ncols
+        ax = fig.add_subplot(gs[r, c])
+
+        rho = rho_mats_all[idp]
+        pmat = p_mats_all[idp]
+
+        annot = np.full(rho.shape, "", dtype=object)
+        for i in range(n_times):
+            for j in range(n_times):
+                val = rho.iat[i, j]
+                pval = pmat.iat[i, j]
+                if not np.isnan(val):
+                    star = "*" if (not pd.isna(pval) and pval < significance) else ""
+                    annot[i, j] = f"{val:{fmt}}{star}"
+
+        sns.heatmap(
+            rho,
+            ax=ax,
+            annot=annot,
+            fmt="",
+            cmap=cmap,
+            norm=color_norm,
+            center=heatmap_center,
+            linewidths=0.35,
+            linecolor="gray",
+            cbar=False,
+            square=False,
+        )
+        ax.set_title(idp, fontsize=9)
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.set_xticklabels(times, rotation=45, ha="right", fontsize=7)
+        ax.set_yticklabels(times, rotation=0, fontsize=7)
+
+    # hide unused axes inside the idp grid
+    total_idp_slots = max(1, nrows) * ncols
+    if n_idp_plot < total_idp_slots:
+        for k in range(n_idp_plot, total_idp_slots):
+            r = k // ncols
+            c = k % ncols
+            ax = fig.add_subplot(gs[r, c])
+            ax.axis("off")
+
+    # ---------- Summary 1: mean across all IDPs ----------
+    row_for_summaries = max(0, nrows)
+    ax_mean_timepair = fig.add_subplot(gs[row_for_summaries, :])
+
+    annot_mean = np.full(mean_rho_matrix.shape, "", dtype=object)
+    for i in range(n_times):
+        for j in range(n_times):
+            val = mean_rho_matrix[i, j]
+            pval = combined_p_matrix_adj[i, j]
+            if not np.isnan(val):
+                star = "*" if (not np.isnan(pval) and pval < significance) else ""
+                annot_mean[i, j] = f"{val:{fmt}}{star}"
+
+    sns.heatmap(
+        mean_rho_matrix,
+        ax=ax_mean_timepair,
+        annot=annot_mean,
+        fmt="",
+        cmap=cmap,
+        norm=color_norm,
+        center=heatmap_center,
+        linewidths=0.35,
+        linecolor="gray",
+        cbar=False,
+        square=False,
+    )
+    ax_mean_timepair.set_title(
+        f"Mean across {len(all_idps)} features (per time-pair) — combined p: {combine_method}, correction: {p_correction}",
+        fontsize=10,
+    )
+    ax_mean_timepair.set_xlabel("")
+    ax_mean_timepair.set_ylabel("")
+    ax_mean_timepair.set_xticklabels(times, rotation=45, ha="right", fontsize=7)
+    ax_mean_timepair.set_yticklabels(times, rotation=0, fontsize=7)
+
+    # ---------- Summary 2: per-IDP mean across time-pairs ----------
+    ax_idp_mean = fig.add_subplot(gs[row_for_summaries + 1, :])
+    idp_mean_matrix = np.array(idp_mean_rhos, dtype=float).reshape(-1, 1)
+
+    annot_idp = np.array(
+        [
+            f"{v:{fmt}}{'*' if (not np.isnan(p) and p < significance) else ''}"
+            for v, p in zip(idp_mean_rhos, idp_combined_ps_adj)
+        ]
+    ).reshape(-1, 1)
+
+    sns.heatmap(
+        idp_mean_matrix,
+        ax=ax_idp_mean,
+        annot=annot_idp,
+        fmt="",
+        cmap=cmap,
+        norm=color_norm,
+        center=heatmap_center,
+        linewidths=0.35,
+        linecolor="gray",
+        cbar=False,
+        yticklabels=all_idps,
+        xticklabels=["MeanAcrossTimePairs"],
+        square=False,
+    )
+    ax_idp_mean.set_title(
+        f"Per-feature mean across time-pairs ({len(all_idps)} features) — combined p: {combine_method}, correction: {p_correction}",
+        fontsize=8,
+    )
+    ax_idp_mean.set_xlabel("")
+    ax_idp_mean.set_ylabel("")
+    ax_idp_mean.set_xticklabels([""], rotation=0)
+
+    # ---------- Shared colorbar ----------
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=color_norm)
+    sm.set_array([])
+    fig.colorbar(sm, cax=cbar_ax, label="Spearman Rho")
+
+    plt.suptitle(
+        f"Subject order consistency summaries computed from {len(all_idps)} features\n('*' indicates p < {significance} from permutation testing)",
+        fontsize=8,
+    )
+    plt.tight_layout(rect=[0, 0, 0.90, 0.96])
+
+    if rep is not None:
+        rep.log_plot(fig, "Subject order consistency")
+        plt.close(fig)
+        return None, None
+
+    if show:
+        plt.show()
+
+    return None
+
+def plot_SubjectOrder_old(
+    df,
+    idp_col="IDP",
+    time_a_col="TimeA",
+    time_b_col="TimeB",
+    rho_col="SpearmanRho",
+    p_col="pValue",
+    times_order=None,
+    significance=0.05,
+    ncols=2,
+    figsize_per_plot=(4, 4),
+    cmap="cividis",
+    cmap_limits=None,
     fmt=".2f",
     center=0,
     vmax_abs=None,
@@ -220,7 +650,7 @@ def plot_SubjectOrder(
       - combine_method='stouffer' uses the sign from rho (mean rho across IDPs for that cell)
         to create signed z-scores from two-sided p-values.
       - combine_method='fisher' uses scipy.stats.combine_pvalues(method='fisher') and ignores sign.
-      - p_correction operates separately for the time×time summary matrix and for per-IDP combined p's.
+      - p_correction operates separately for the time×time summary matrix and for per-feature combined p's.
       - For best statistical rigor with permutation-based tests, combining at the permutation-level
         (i.e. combining test stats per permutation and building an empirical null) is preferable.
     """
@@ -346,9 +776,23 @@ def plot_SubjectOrder(
         raise ValueError("No numeric SpearmanRho values found.")
 
     # ---------- Color scale ----------
-    if vmax_abs is None:
-        vmax_abs = max(abs(np.nanmin(all_rho_values)), abs(np.nanmax(all_rho_values)))
-    vmin, vmax = -vmax_abs, vmax_abs
+    # ---------- Color scale ----------
+    if cmap_limits is not None:
+
+        if len(cmap_limits) != 2:
+            raise ValueError("cmap_limits must be [vmin, vmax]")
+
+        vmin, vmax = cmap_limits
+
+    else:
+
+        if vmax_abs is None:
+            vmax_abs = max(
+                abs(np.nanmin(all_rho_values)),
+                abs(np.nanmax(all_rho_values))
+            )
+
+        vmin, vmax = -vmax_abs, vmax_abs
 
     # ---------- Summary calculations (use ALL IDPs) ----------
     stacked = np.stack(
@@ -478,7 +922,7 @@ def plot_SubjectOrder(
             idp_combined_ps.reshape(-1, 1), p_correction
         ).reshape(-1)
 
-    # ---------- Prepare mean_rho_matrix (mean across IDPs) ----------
+    # ---------- Prepare mean_rho_matrix (mean across features) ----------
     mean_rho_matrix = np.nanmean(stacked, axis=0)
     np.fill_diagonal(mean_rho_matrix, np.nan)
 
@@ -570,7 +1014,7 @@ def plot_SubjectOrder(
         square=False,
     )
     ax_mean_timepair.set_title(
-        f"Mean across  {len(all_idps)} IDPs (per time-pair) — combined p: {combine_method}, correction: {p_correction}",
+        f"Mean across  {len(all_idps)} features (per time-pair) — combined p: {combine_method}, correction: {p_correction}",
         fontsize=10,
     )
     ax_mean_timepair.set_xlabel("")
@@ -604,7 +1048,7 @@ def plot_SubjectOrder(
         square=False,
     )
     ax_idp_mean.set_title(
-        f"Per-IDP mean across time-pairs ({len(all_idps)} IDPs) — combined p: {combine_method}, correction: {p_correction}",
+        f"Per-feature mean across time-pairs ({len(all_idps)} features) — combined p: {combine_method}, correction: {p_correction}",
         fontsize=8,
     )
     ax_idp_mean.set_xlabel("")
@@ -618,7 +1062,7 @@ def plot_SubjectOrder(
     fig.colorbar(sm, cax=cbar_ax, label="Spearman Rho")
 
     plt.suptitle(
-        f"Subject order consistency summaries computed from {len(all_idps)} IDPs\n('*' indicates p < {significance} from permutation testing)",
+        f"Subject order consistency summaries computed from {len(all_idps)} features\n('*' indicates p < {significance} from permutation testing)",
         fontsize=8,
     )
     plt.tight_layout(rect=[0, 0, 0.90, 0.96])
@@ -671,7 +1115,7 @@ def plot_before_after_by_site(df, feature_cols, site_col="Site"):
         axes[0].set_title(f"Before harmonisation: {feat}")
         axes[0].grid(axis="y")
         sns.boxplot(data=df, x=site_col, y=f"{feat}_harm", ax=axes[1])
-        axes[1].set_title(f"After regression harmonisation: {feat}")
+        axes[1].set_title(f"After harmonisation: {feat}")
         axes[1].grid(axis="y")
         plt.tight_layout()
         plt.show()
