@@ -11,7 +11,6 @@ statsmodels
 matplotlib 
 seaborn
 antspyx 
-nibabel
 neuroHarmonize
 neuroCombat
 
