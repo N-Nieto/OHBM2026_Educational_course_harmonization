@@ -32,21 +32,31 @@ The course is organized into four progressive blocks, each containing interactiv
 
 ``` lua
 📦 OHBM2026-harmonization-course
-├── 📁 data/                    # Simulated and example datasets
-├── 📁 notebooks/               # Jupyter notebooks by block
-│   ├── block01_eos/            # Effects of Site Introduction
-│   ├── block02_harmonization/  # Harmonization General
-│   ├── block03_ls/             # Location-Scale Methods
-│   └── block04_advanced/       # Alternatives & Future Directions
-├── 📁 utils/                   # Helper functions and visualization tools
-├── 📁 solutions/               # Solutions to exercises
-└── 📄 requirements.txt         # Python dependencies
+├── 📁 data/                                    # Simulated and example datasets
+├── 📁 notebooks/                               # Jupyter notebooks by block
+│   ├── 📁 block01/                             # Effects of Site Introduction
+│   │       ├──📁 block01_utils/                # Processing and visualization functions fro the block
+│   │       ├── 🐍 B1_N1_name.ipynb             # Notebooks are organized by block (B) and by Notebook (N).
+│   │        ...
+│   │       └── 🐍 B1_NX_name.ipynb
+│   ├── 📁 block02/                             # Harmonization General
+│   ├── 📁 block03/                             # Location-Scale Methods
+│   └── 📁 block04/                             # Alternatives & Future Directions
+├── 📁 solutions/                               # Solutions to exercises and questions
+│   ├── 📁 block01/                            
+│          ├── 📑 B1_N1_solution.ipynb/.md
+            ...
+           └── 📑 B1_NX_solution.ipynb/.md
+│   ├── 📁 block02/                             
+│   ├── 📁 block03/                             
+│   └── 📁 block04/                             
+└── 📄 requirements.txt                         # Python dependencies
 ```
 
 
 ## Running the Notebooks on Binder.
 
-You can run these notebooks instantly online without any local setup using Binder.
+We highly recommend to run the notebooks online without any local setup using Binder. This will allow us to rapidly jump to the content and avoid use time with particular-cases setups.
 
 1.  **Click the badge** to launch the Binder environment:
     [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/N-Nieto/OHBM2026_Educational_course_harmonization/HEAD)
