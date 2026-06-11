@@ -1,0 +1,292 @@
+{
+    "model": {
+        "name": "lh_G_and_S_transv_frontopol",
+        "type": "HBR",
+        "is_fitted": true,
+        "is_from_dict": false,
+        "transfered": false,
+        "ptk_version": "1.2.0.post1",
+        "likelihood": {
+            "name": "Normal",
+            "mu": {
+                "name": "mu",
+                "_dims": null,
+                "mapping": "identity",
+                "mapping_params": [
+                    0,
+                    1
+                ],
+                "slope": {
+                    "name": "slope_mu",
+                    "_dims": [
+                        "mu_covariates"
+                    ],
+                    "mapping": "identity",
+                    "mapping_params": [
+                        0,
+                        1
+                    ],
+                    "dist_name": "Normal",
+                    "dist_params": [
+                        0,
+                        2
+                    ],
+                    "dims": [
+                        "mu_covariates"
+                    ],
+                    "type": "Prior"
+                },
+                "intercept": {
+                    "name": "intercept_mu",
+                    "_dims": null,
+                    "mapping": "identity",
+                    "mapping_params": [
+                        0,
+                        1
+                    ],
+                    "mu": {
+                        "name": "mu_intercept_mu",
+                        "_dims": null,
+                        "mapping": "identity",
+                        "mapping_params": [
+                            0,
+                            1
+                        ],
+                        "dist_name": "Normal",
+                        "dist_params": [
+                            0.0,
+                            1.0
+                        ],
+                        "dims": null,
+                        "type": "Prior"
+                    },
+                    "sigma": {
+                        "name": "sigma_intercept_mu",
+                        "_dims": null,
+                        "mapping": "softplus",
+                        "mapping_params": [
+                            0.0,
+                            2.0
+                        ],
+                        "dist_name": "Normal",
+                        "dist_params": [
+                            3.0,
+                            1.0
+                        ],
+                        "dims": null,
+                        "type": "Prior"
+                    },
+                    "dims": null,
+                    "type": "RandomPrior",
+                    "site_sigma": {
+                        "name": "site_sigma_intercept_mu",
+                        "_dims": null,
+                        "mapping": "softplus",
+                        "mapping_params": [
+                            0.0,
+                            2.0
+                        ],
+                        "dist_name": "Normal",
+                        "dist_params": [
+                            3.0,
+                            1.0
+                        ],
+                        "dims": null,
+                        "type": "Prior"
+                    },
+                    "sex_sigma": {
+                        "name": "sex_sigma_intercept_mu",
+                        "_dims": null,
+                        "mapping": "softplus",
+                        "mapping_params": [
+                            0.0,
+                            2.0
+                        ],
+                        "dist_name": "Normal",
+                        "dist_params": [
+                            3.0,
+                            1.0
+                        ],
+                        "dims": null,
+                        "type": "Prior"
+                    }
+                },
+                "basis_function": {
+                    "basis_column": 0,
+                    "is_fitted": true,
+                    "basis_name": "bspline",
+                    "min": -1.513635134636064,
+                    "max": 4.216582096125143,
+                    "compute_min": true,
+                    "compute_max": true,
+                    "degree": 3,
+                    "nknots": 5,
+                    "left_expand": 0.05,
+                    "right_expand": 0.05,
+                    "knot_method": "uniform",
+                    "knots": [
+                        -1.8001459961741242,
+                        -1.8001459961741242,
+                        -1.8001459961741242,
+                        -1.8001459961741242,
+                        -0.22433625771479226,
+                        1.3514734807445397,
+                        2.927283219203871,
+                        4.5030929576632035,
+                        4.5030929576632035,
+                        4.5030929576632035,
+                        4.5030929576632035
+                    ],
+                    "basis_function": "BsplineBasisFunction"
+                },
+                "covariate_dims": [
+                    "mu_covariates_0",
+                    "mu_covariates_1",
+                    "mu_covariates_2",
+                    "mu_covariates_3",
+                    "mu_covariates_4",
+                    "mu_covariates_5",
+                    "mu_covariates_6",
+                    "mu_covariates_7"
+                ],
+                "one_dimensional": false,
+                "dims": null,
+                "type": "LinearPrior"
+            },
+            "sigma": {
+                "name": "sigma",
+                "_dims": null,
+                "mapping": "softplus",
+                "mapping_params": [
+                    0.0,
+                    2.0
+                ],
+                "slope": {
+                    "name": "slope_sigma",
+                    "_dims": [
+                        "sigma_covariates"
+                    ],
+                    "mapping": "identity",
+                    "mapping_params": [
+                        0,
+                        1
+                    ],
+                    "dist_name": "Normal",
+                    "dist_params": [
+                        0.0,
+                        2.0
+                    ],
+                    "dims": [
+                        "sigma_covariates"
+                    ],
+                    "type": "Prior"
+                },
+                "intercept": {
+                    "name": "intercept_sigma",
+                    "_dims": null,
+                    "mapping": "identity",
+                    "mapping_params": [
+                        0,
+                        1
+                    ],
+                    "dist_name": "Normal",
+                    "dist_params": [
+                        3.0,
+                        2.0
+                    ],
+                    "dims": null,
+                    "type": "Prior"
+                },
+                "basis_function": {
+                    "basis_column": 0,
+                    "is_fitted": true,
+                    "basis_name": "bspline",
+                    "min": -1.513635134636064,
+                    "max": 4.216582096125143,
+                    "compute_min": true,
+                    "compute_max": true,
+                    "degree": 3,
+                    "nknots": 5,
+                    "left_expand": 0.05,
+                    "right_expand": 0.05,
+                    "knot_method": "uniform",
+                    "knots": [
+                        -1.8001459961741242,
+                        -1.8001459961741242,
+                        -1.8001459961741242,
+                        -1.8001459961741242,
+                        -0.22433625771479226,
+                        1.3514734807445397,
+                        2.927283219203871,
+                        4.5030929576632035,
+                        4.5030929576632035,
+                        4.5030929576632035,
+                        4.5030929576632035
+                    ],
+                    "basis_function": "BsplineBasisFunction"
+                },
+                "covariate_dims": [
+                    "sigma_covariates_0",
+                    "sigma_covariates_1",
+                    "sigma_covariates_2",
+                    "sigma_covariates_3",
+                    "sigma_covariates_4",
+                    "sigma_covariates_5",
+                    "sigma_covariates_6",
+                    "sigma_covariates_7"
+                ],
+                "one_dimensional": false,
+                "dims": null,
+                "type": "LinearPrior"
+            }
+        },
+        "_name": "lh_G_and_S_transv_frontopol",
+        "draws": 1500,
+        "tune": 500,
+        "cores": 4,
+        "chains": 4,
+        "nuts_sampler": "nutpie",
+        "init": "jitter+adapt_diag",
+        "progressbar": true,
+        "be_maps": {
+            "site": {
+                "AnnArbor_a": 0,
+                "AnnArbor_b": 1,
+                "Atlanta": 2,
+                "Baltimore": 3,
+                "Bangor": 4,
+                "Beijing_Zang": 5,
+                "Berlin_Margulies": 6,
+                "Cambridge_Buckner": 7,
+                "Cleveland": 8,
+                "ICBM": 9,
+                "Leiden_2180": 10,
+                "Leiden_2200": 11,
+                "Milwaukee_b": 12,
+                "Munchen": 13,
+                "NewYork_a": 14,
+                "NewYork_a_ADHD": 15,
+                "Newark": 16,
+                "Oulu": 17,
+                "Oxford": 18,
+                "PaloAlto": 19,
+                "Pittsburgh": 20,
+                "Queensland": 21,
+                "SaintLouis": 22
+            },
+            "sex": {
+                "M": 0,
+                "F": 1
+            }
+        },
+        "idata_path": "../out/models/within_study/model/lh_G_and_S_transv_frontopol/idata.nc"
+    },
+    "outscaler": {
+        "scaler_type": "standardize",
+        "adjust_outliers": false,
+        "m": 2.610887755102041,
+        "s": 0.22558855494225424,
+        "min": 1.91,
+        "max": 3.432
+    }
+}
