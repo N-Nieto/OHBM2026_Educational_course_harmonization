@@ -34,14 +34,14 @@ The course is organized into four progressive blocks, each containing interactiv
 📦 OHBM2026-harmonization-course
 ├── 📁 data/                                    # Simulated and example datasets
 ├── 📁 notebooks/                               # Jupyter notebooks by block
-│   ├── 📁 block01/                             # Effects of Site Introduction
+│   ├── 📁 block01/                             # BLOCK1: Effects of Site Introduction
 │   │       ├──📁 block01_utils/                # Processing and visualization functions fro the block
 │   │       ├── 🐍 B1_N1_name.ipynb             # Notebooks are organized by block (B) and by Notebook (N).
 │   │        ...
 │   │       └── 🐍 B1_NX_name.ipynb
-│   ├── 📁 block02/                             # Harmonization General
-│   ├── 📁 block03/                             # Location-Scale Methods
-│   └── 📁 block04/                             # Alternatives & Future Directions
+│   ├── 📁 block02/                             # BLOCK2: Harmonization General
+│   ├── 📁 block03/                             # BLOCK3: Location-Scale Methods
+│   └── 📁 block04/                             # BLOCk4: Alternatives & Future Directions
 ├── 📁 solutions/                               # Solutions to exercises and questions
 │   ├── 📁 block01/                            
 │          ├── 📑 B1_N1_solution.ipynb/.md
@@ -50,9 +50,10 @@ The course is organized into four progressive blocks, each containing interactiv
 │   ├── 📁 block02/                             
 │   ├── 📁 block03/                             
 │   └── 📁 block04/                             
-└── 📄 requirements.txt                         # Python dependencies
-```
+├── 📄 requirements.txt                         # Python dependencies
+└── 📄 Slides.pdf                               # Slide deck used in the presentation 
 
+```
 
 ## Running the Notebooks on Binder.
 
