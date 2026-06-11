@@ -4,7 +4,7 @@
 
 - Do the overall image intensities appear similar?
 
-    Between the raw images, the intensities appear to be very different, with different ROIs displaying different contrasts as well. In the images registered to standard space, the intensities and contrasts are slightly improved both visually and empirically, but there is still a noticable difference.
+    Between the raw images, the intensities appear to be very different, with different ROIs displaying different contrasts as well. In the images registered to standard space, the intensities and contrasts are slightly improved both visually and empirically, but there is still a noticeable difference.
 
 - Are some images noisier than others?
 
@@ -12,7 +12,7 @@
 
 - Does tissue contrast differ between scans?
 
-    Small differences in tissue contrast are often visible, particularly at the boundaries between grey matter, white matter, and cerebrospinal fluid. These contrast differences may influence how easily tissues can be distinguished by both human observers and automated analysis tools. This is an espeically important concept to be aware of for analysis of Imaging Derived Phenotypes (IDPs) describing brain structure.
+    Small differences in tissue contrast are often visible, particularly at the boundaries between grey matter, white matter, and cerebrospinal fluid. These contrast differences may influence how easily tissues can be distinguished by both human observers and automated analysis tools. This is an especially important concept to be aware of for analysis of Imaging Derived Phenotypes (IDPs) describing brain structure.
 
 - Are anatomical boundaries equally clear?
 
@@ -36,5 +36,5 @@
 
 - Looking at the data and the relative size of the bars, make some notes in things you notice
 
-    The main thing to notice is that the order of scanners isn't concistent between different measures, showing that while there is a clear difference, this difference isn't always the same in magnitude nor direction across the brain.
+    The main thing to notice is that the order of scanners isn't consistent between different measures, showing that while there is a clear difference, this difference isn't always the same in magnitude nor direction across the brain.
 
