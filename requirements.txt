@@ -11,5 +11,4 @@ matplotlib
 antspyx 
 neuroHarmonize
 neuroCombat
-dependencies:
-  - python >=3.13,<3.14
+python>=3.11
