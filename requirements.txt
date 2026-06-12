@@ -11,4 +11,3 @@ matplotlib
 antspyx 
 neuroHarmonize
 neuroCombat
-python>=3.11
