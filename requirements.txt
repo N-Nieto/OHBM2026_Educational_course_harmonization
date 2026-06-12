@@ -12,4 +12,4 @@ antspyx
 neuroHarmonize
 neuroCombat
 pcntoolkit
-python >=3.11
+python=3.11
