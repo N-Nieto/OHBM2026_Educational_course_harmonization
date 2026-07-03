@@ -51,9 +51,11 @@ The course is organized into four progressive blocks, each containing interactiv
 │   ├── 📁 block03/                             
 │   └── 📁 block04/                             
 ├── 📄 requirements.txt                         # Python dependencies
-└── 📄 Slides.pdf                               # Slide deck used in the presentation 
+└── 📄 slides.pdf/.ppt                          # Slide deck used in the presentation 
 
 ```
+## Videos
+Three videos, recorded by [Gaurav Bhalerao](https://github.com/gvbhalerao591), can be found [here](https://drive.google.com/drive/folders/1O_Hf0MwO2VIfAz-8lEe5vk8t5LXRDX9x?usp=sharing). The videos cover the content for Block 2 - Notebooks 1, 2, and 3, and Block 4 - Notebooks 1 and 2.
 
 ## Running the Notebooks on Binder.
 
