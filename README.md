@@ -70,3 +70,9 @@ We highly recommend to run the notebooks online without any local setup using Bi
 
 
 [<img src="images/OHBM_2026_logo.png">](https://humanbrainmapping.org/i4a/pages/index.cfm?pageid=4293)
+
+---
+
+# Acknowledgement
+
+This course was developed as one of the outcomes of OxCIN’s (Oxford University Centre for Integrative Neuroimaging) collaborative work through the Harmonisation Working Group. It was designed by members of the group, including both internal and external collaborators, and was presented at OHBM 2026 annual meeting. We are grateful to the other members of the Harmonisation Working Group for their regular contributions to discussions and for helping shape the broader collaborative context of this work. Additionally, this work was supported by the Rosetrees Trust and the NIHR Oxford Health Biomedical Research Centre (NIHR203316). The views expressed are those of the author(s) and not necessarily those of the NIHR or the Department of Health and Social Care. The Centre for Integrative Neuroimaging was supported by core funding from the Wellcome Trust (203139/Z/16/Z and 203139/A/16/Z). 
