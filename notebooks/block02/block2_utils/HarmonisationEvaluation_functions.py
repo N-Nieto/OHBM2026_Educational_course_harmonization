@@ -1,11 +1,11 @@
+import warnings
+from collections.abc import Iterable, Sequence
+
 import numpy as np
 import pandas as pd
-from typing import Sequence, Optional
-from scipy.stats import spearmanr, chi2, fligner
-from numpy.random import default_rng
-from typing import Tuple, Dict, Any, List, Iterable
-import warnings
 import statsmodels.formula.api as smf
+from numpy.random import default_rng
+from scipy.stats import chi2, fligner, spearmanr
 
 
 def simulate_harmonisation_data(
@@ -16,7 +16,7 @@ def simulate_harmonisation_data(
     subject_mean=1500,
     subject_sd=80,
     noise_sd=20,
-    scale_value=50
+    scale_value=50,
 ):
     np.random.seed(seed)
 
@@ -37,7 +37,8 @@ def simulate_harmonisation_data(
     # site-specific bias for each feature
     # each site gets a different shift per feature
     site_bias = {
-        site: np.random.normal(loc=0, scale=scale_value, size=n_features) for site in sites
+        site: np.random.normal(loc=0, scale=scale_value, size=n_features)
+        for site in sites
     }
 
     rows = []
@@ -73,7 +74,7 @@ def WithinSubjVar_long(
     idp_matrix: np.ndarray,
     subjects: Sequence,
     timepoints: Sequence,
-    idp_names: Optional[Sequence[str]] = None,
+    idp_names: Sequence[str] | None = None,
 ) -> pd.DataFrame:
 
     if not isinstance(idp_matrix, np.ndarray):
@@ -151,9 +152,9 @@ def SubjectOrder_long(
     idp_matrix: np.ndarray,
     subjects: Sequence,
     timepoints: Sequence,
-    idp_names: Optional[Sequence[str]] = None,
+    idp_names: Sequence[str] | None = None,
     nPerm: int = 10000,
-    seed: Optional[int] = None,
+    seed: int | None = None,
 ) -> pd.DataFrame:
     """
     Pairwise Spearman with permutation testing using scipy.stats.spearmanr.
@@ -351,12 +352,12 @@ def SubjectOrder_long(
 # -------------------------
 def _build_fixed_formula_terms(
     fix_eff: Sequence[str], data: pd.DataFrame, do_zscore_predictors: bool = True
-) -> List[str]:
+) -> list[str]:
     """
     For each predictor v in fix_eff that is numeric in `data`, create zscore_v in `data` (per-feature/local df).
     Then return list of predictor column names to use in the formula, preferring zscore_v if present.
     """
-    terms: List[str] = []
+    terms: list[str] = []
     if do_zscore_predictors and fix_eff is not None:
         for v in fix_eff:
             if v in data.columns and pd.api.types.is_numeric_dtype(data[v]):
@@ -401,17 +402,17 @@ def _safe_fit_mixedlm(
 # Helper: build input df
 # ----------------------------------------
 def _build_input_df_if_needed(
-    data: Optional[pd.DataFrame],
-    idp_matrix: Optional[np.ndarray],
-    subjects: Optional[Sequence],
-    timepoints: Optional[Sequence],
-    batch_name: Optional[Sequence],
-    idp_names: Optional[Iterable[str]],
-    idvar: Optional[str] = None,
-    batchvar: Optional[str] = None,
-    timevar: Optional[str] = None,
-    covariates: Optional[Dict[str, Sequence]] = None,
-) -> Tuple[pd.DataFrame, str, str, str]:
+    data: pd.DataFrame | None,
+    idp_matrix: np.ndarray | None,
+    subjects: Sequence | None,
+    timepoints: Sequence | None,
+    batch_name: Sequence | None,
+    idp_names: Iterable[str] | None,
+    idvar: str | None = None,
+    batchvar: str | None = None,
+    timevar: str | None = None,
+    covariates:dict[str, Sequence] | None = None,
+) -> tuple[pd.DataFrame, str, str, str]:
     """
     Build or return a DataFrame for modeling and return the actual column names used:
       (df, idvar, batchvar, timevar).
@@ -481,20 +482,22 @@ def _build_input_df_if_needed(
 # Main: AdditiveEffect_long (per-feature zscore behavior)
 # ----------------------------------------
 model_defs_add = []
+
+
 def AdditiveEffect_long(
-    data: Optional[pd.DataFrame] = None,
-    idp_matrix: Optional[np.ndarray] = None,
-    subjects: Optional[Sequence] = None,
-    timepoints: Optional[Sequence] = None,
-    batch_name: Optional[Sequence] = None,
-    idp_names: Optional[Iterable[str]] = None,
-    covariates: Optional[Dict[str, Sequence]] = None,
+    data: pd.DataFrame | None = None,
+    idp_matrix: np.ndarray | None = None,
+    subjects: Sequence | None = None,
+    timepoints: Sequence | None = None,
+    batch_name: Sequence | None = None,
+    idp_names: Iterable[str] | None = None,
+    covariates: dict[str, Sequence] | None = None,
     *,
-    idvar: Optional[str] = None,
-    batchvar: Optional[str] = None,
-    timevar: Optional[str] = None,
-    fix_eff: Optional[Iterable[str]] = None,
-    ran_eff: Optional[Iterable[str]] = None,
+    idvar: str | None = None,
+    batchvar: str | None = None,
+    timevar: str | None = None,
+    fix_eff: Iterable[str] | None = None,
+    ran_eff: Iterable[str] | None = None,
     do_zscore: bool = True,
     reml: bool = False,
     verbose: bool = True,
@@ -562,7 +565,7 @@ def AdditiveEffect_long(
     if verbose:
         print(f"[AdditiveEffect_long] found {V} features")
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for idx, feat in enumerate(feature_cols, 1):
         if verbose:
             print(
@@ -745,20 +748,22 @@ def AdditiveEffect_long(
 
 
 model_defs_mul = []
+
+
 def MultiplicativeEffect_long(
-    data: Optional[pd.DataFrame] = None,
-    idp_matrix: Optional[np.ndarray] = None,
-    subjects: Optional[Sequence] = None,
-    timepoints: Optional[Sequence] = None,
-    batch_name: Optional[Sequence] = None,
-    idp_names: Optional[Iterable[str]] = None,
-    covariates: Optional[Dict[str, Sequence]] = None,
+    data: pd.DataFrame | None = None,
+    idp_matrix: np.ndarray | None = None,
+    subjects: Sequence | None = None,
+    timepoints: Sequence | None = None,
+    batch_name: Sequence | None = None,
+    idp_names: Iterable[str] | None = None,
+    covariates: dict[str, Sequence] | None = None,
     *,
-    idvar: Optional[str] = None,
-    batchvar: Optional[str] = None,
-    timevar: Optional[str] = None,
-    fix_eff: Optional[Iterable[str]] = None,
-    ran_eff: Optional[Iterable[str]] = None,
+    idvar: str | None = None,
+    batchvar: str | None = None,
+    timevar: str | None = None,
+    fix_eff: Iterable[str] | None = None,
+    ran_eff: Iterable[str] | None = None,
     do_zscore: bool = True,
     reml: bool = False,
     verbose: bool = True,
@@ -884,7 +889,7 @@ def MultiplicativeEffect_long(
     if verbose:
         print(f"[MultEffect_long] found {V} features")
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     for idx, feat in enumerate(feature_cols, 1):
         if verbose:
