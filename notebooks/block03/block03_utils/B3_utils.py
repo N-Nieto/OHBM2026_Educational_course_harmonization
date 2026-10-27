@@ -1,16 +1,17 @@
-"""Helper functions for the Block 3 notebooks (effects of site in ML pipelines).
+"""Helper functions for the Block 3 notebooks.
 
-Sections
---------
-- B3_N1 helpers: simulate_multisite_data_with_covariates, run_fpr_simulation
-- Shared helpers: simulate_classification, cross_validated_auc, site_auc,
-  plot_scenario, summarize_seed_results
-- B3_N2 (EoS in ML): run_classification_scenario, seed_summary
-- B3_N3 (metrics by site): make_good_and_bad_sites, run_metrics_by_site_scenario,
-  plot_metrics_by_site; limitations: site_size_experiment,
-  plot_site_size_experiment, metrics_table_by_site, auc_under_site_effects
-- B3_N4 (ComBat with site-class imbalance): evaluate_harmonization_pipelines,
-  run_harmonization_scenario, plot_pipeline_auc
+Which notebook uses what
+------------------------
+B3_N2 (effects of site in ML)        -> run_classification_scenario, summarize_seed_results
+B3_N3 (metrics by site)              -> run_metrics_by_site_scenario, plot_metrics_by_site
+B3_N4 (ComBat with class imbalance)  -> run_harmonization_scenario, plot_pipeline_auc,
+                                        summarize_seed_results
+B3_N1 (alternative version)          -> simulate_multisite_data_with_covariates, run_fpr_simulation
+
+All data are simulated with ``make_multisite_classification`` from uniharmony.
+Its argument ``balance_per_site`` is one ``[proportion of Class 0, proportion of Class 1]``
+list per site, e.g. ``[[0.1, 0.9], [0.9, 0.1]]``. A flat list such as ``[0.1, 0.9]``
+is applied to *every* site, so it creates no site-class imbalance.
 """
 
 import matplotlib.pyplot as plt
@@ -19,14 +20,8 @@ import pandas as pd
 import seaborn as sns
 from scipy.stats import ttest_ind
 from sklearn.base import clone
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    accuracy_score,
-    balanced_accuracy_score,
-    recall_score,
-    roc_auc_score,
-)
-from sklearn.model_selection import cross_val_predict, cross_val_score, train_test_split
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import cross_val_predict, cross_val_score
 from uniharmony import verbosity
 from uniharmony.datasets import make_multisite_classification
 from uniharmony.metrics import report_metrics_by_site
@@ -34,15 +29,497 @@ from uniharmony.plot import plot_decision_boundary_2d
 
 sns.set_theme(style="whitegrid")
 
+# Hide uniharmony's info/debug messages.
 verbosity("error")
 
-# Imported after setting the verbosity: uniharmony.combat binds its logger at
-# import time, so importing it earlier would print debug messages.
+# Imported after setting the verbosity: uniharmony.combat creates its logger when
+# it is imported, so importing it earlier would print debug messages.
 from uniharmony.combat import NeuroComBat  # noqa: E402
 
 
 # =============================================================================
-# B3_N1 helpers
+# Small helpers used by several notebooks
+# =============================================================================
+def plot_scenario(ax, X, y, sites, title, clf=None, fontsize=13):
+    """Scatter plot of the first two features.
+
+    Colour = site, marker = class. If a fitted classifier is given (and the data
+    have 2 features), its decision boundary is drawn as a line.
+    """
+    df = pd.DataFrame(
+        {
+            "Feature 1": X[:, 0],
+            "Feature 2": X[:, 1],
+            "Class": [f"Class {c}" for c in y],
+            "Site": [f"Site {s}" for s in sites],
+        }
+    )
+    sns.scatterplot(
+        data=df,
+        x="Feature 1",
+        y="Feature 2",
+        hue="Site",
+        style="Class",
+        s=100,
+        alpha=0.7,
+        ax=ax,
+        hue_order=[f"Site {s}" for s in np.unique(sites)],
+        style_order=["Class 0", "Class 1"],
+    )
+    ax.set_title(title, fontsize=fontsize, fontweight="bold")
+    if clf is not None and X.shape[1] == 2:
+        plot_decision_boundary_2d(ax, clf)
+
+
+def summarize_seed_results(results, by="Scenario"):
+    """Mean and SD of every metric over the repeated datasets (seeds).
+
+    ``results`` is a list of the tables returned by ``run_classification_scenario``
+    (B3_N2) or ``run_harmonization_scenario`` (B3_N4): one row per dataset.
+    ``by`` names the column(s) that identify a scenario, e.g. ["Scenario", "Pipeline"].
+    """
+    if not isinstance(results, (list, tuple)):
+        results = [results]
+    df = pd.concat(results, ignore_index=True)
+    by = [by] if isinstance(by, str) else list(by)
+    metric_columns = [c for c in df.columns if c not in by + ["seed"]]
+    # sort=False keeps the scenarios in the order in which they were run
+    return df.groupby(by, sort=False)[metric_columns].agg(["mean", "std"]).round(3)
+
+
+# =============================================================================
+# B3_N2: effects of site in ML pipelines
+# =============================================================================
+def seed_summary(
+    n_samples,
+    clf,
+    cv,
+    n_seeds,
+    title,
+    n_sites=3,
+    n_features=2,
+    signal_type="blobs",
+    **sim_kwargs,
+):
+    """Simulate the same scenario with seeds 0, 1, ..., n_seeds - 1.
+
+    For each simulated dataset, the AUC is averaged over the cross-validation
+    folds. Returns one row per dataset.
+    """
+    rows = []
+    for seed in range(n_seeds):
+        X, y, _ = make_multisite_classification(
+            n_samples=n_samples,
+            n_sites=n_sites,
+            n_features=n_features,
+            signal_type=signal_type,
+            random_state=seed,
+            **sim_kwargs,
+        )
+        auc = cross_val_score(clf, X, y, cv=cv, scoring="roc_auc").mean()
+        rows.append({"Scenario": title, "seed": seed, "auc": auc})
+    return pd.DataFrame(rows)
+
+
+def run_classification_scenario(
+    title,
+    n_samples,
+    clf,
+    cv,
+    random_state,
+    n_seeds=20,
+    n_sites=3,
+    n_features=2,
+    signal_type="blobs",
+    verbose=True,
+    **sim_kwargs,
+):
+    """One B3_N2 scenario: simulate, cross-validate, plot, then repeat over seeds.
+
+    Extra keyword arguments (signal_strength, site_effect_strength,
+    site_effect_type, balance_per_site, ...) go to make_multisite_classification.
+    Returns the per-seed table of ``seed_summary``.
+    """
+    # 1. Simulate the example dataset.
+    X, y, sites = make_multisite_classification(
+        n_samples=n_samples,
+        n_sites=n_sites,
+        n_features=n_features,
+        signal_type=signal_type,
+        random_state=random_state,
+        **sim_kwargs,
+    )
+
+    # 2. Cross-validated AUC: the model is always tested on subjects it has not seen.
+    auc = cross_val_score(clf, X, y, cv=cv, scoring="roc_auc").mean()
+
+    # 3. Plot the data. The decision boundary comes from a model fitted on all
+    #    subjects; it is only for the picture, not for the AUC.
+    _, ax = plt.subplots(figsize=(10, 8))
+    plot_scenario(
+        ax,
+        X,
+        y,
+        sites,
+        f"{title}\nMean CV AUC for example dataset (random_state={random_state}): {auc:.3f}",
+        clf=clone(clf).fit(X, y),
+        fontsize=14,
+    )
+    plt.tight_layout()
+    plt.show()
+
+    # 4. Repeat the scenario on other random datasets to see how stable the AUC is.
+    results = seed_summary(
+        n_samples,
+        clf,
+        cv,
+        n_seeds,
+        title,
+        n_sites,
+        n_features,
+        signal_type,
+        **sim_kwargs,
+    )
+    if verbose:
+        print(
+            f"Across {n_seeds} other datasets: "
+            f"AUC {results.auc.mean():.3f} [{results.auc.min():.3f}-{results.auc.max():.3f}]"
+        )
+    return results
+
+
+# =============================================================================
+# B3_N3: metrics by site
+# =============================================================================
+def make_good_and_bad_sites(
+    n_samples_per_site, bad_sites, signal_strength=1.0, n_features=10, random_state=None
+):
+    """Simulate "good" sites (features predict the class) and "bad" sites (they don't).
+
+    All sites are drawn from the same problem without effects of site, so the
+    features look the same everywhere. In the bad sites we shuffle the class
+    labels: there, features and class are unrelated (think of unreliable
+    diagnoses or unusable scans).
+    """
+    X, y, sites = make_multisite_classification(
+        n_sites=len(n_samples_per_site),
+        n_samples=list(n_samples_per_site),  # one number of subjects per site
+        n_features=n_features,
+        signal_type="linear",
+        signal_strength=signal_strength,
+        site_effect_strength=0,  # no effects of site
+        random_state=random_state,
+    )
+    rng = np.random.default_rng(random_state)
+    y = y.copy()
+    for s in bad_sites:
+        idx = np.flatnonzero(sites == s)
+        y[idx] = rng.permutation(y[idx])  # shuffle the labels inside the bad site
+    return X, y, sites
+
+
+def run_metrics_by_site_scenario(
+    n_samples_per_site,
+    bad_sites,
+    clf,
+    cv,
+    random_state,
+    metrics,
+    signal_strength=1.0,
+    n_features=10,
+):
+    """One B3_N3 scenario: overall and per-site metrics of a single model.
+
+    Returns
+    -------
+    results : dict
+        Output of ``report_metrics_by_site``: {metric name: {"overall": value, site: value}}.
+    n_per_site : dict
+        Number of subjects in each site.
+    """
+    # 1. Simulate the good and bad sites.
+    X, y, sites = make_good_and_bad_sites(
+        n_samples_per_site, bad_sites, signal_strength, n_features, random_state
+    )
+
+    # 2. ONE model trained on all sites. cross_val_predict gives every subject a
+    #    prediction from a model that did not see that subject (out-of-fold).
+    #    We keep the probability of Class 1, which the AUC needs.
+    proba = cross_val_predict(clf, X, y, cv=cv, method="predict_proba")[:, 1]
+
+    # 3. Compute the metrics on all subjects ("overall") and on each site's subjects.
+    #    Metrics that need predicted classes (e.g. balanced accuracy) threshold
+    #    the probabilities at 0.5 inside report_metrics_by_site.
+    results = report_metrics_by_site(y, proba, sites, metrics)
+
+    n_per_site = {s: int(np.sum(sites == s)) for s in np.unique(sites)}
+    return results, n_per_site
+
+
+def plot_metrics_by_site(
+    ax, results, metric_name, n_per_site, title, color="steelblue"
+):
+    """Bar plot: one bar per site (labelled with its number of subjects) + the overall value.
+
+    The site values are shown one by one and never averaged: an average would
+    give a small site the same weight as a large one.
+    """
+    scores = results[metric_name]
+    site_ids = [s for s in scores if s != "overall"]
+    values = [scores[s] for s in site_ids]
+    labels = [f"Site {s}\n(n={n_per_site[s]})" for s in site_ids]
+
+    sns.barplot(x=labels, y=values, color=color, ax=ax)
+    ax.bar_label(ax.containers[0], fmt="%.2f", padding=3)
+    ax.axhline(
+        scores["overall"],
+        color="black",
+        linestyle="--",
+        label=f"Overall (all subjects): {scores['overall']:.3f}",
+    )
+    ax.axhline(0.5, color="red", linestyle="--", alpha=0.7, label="Chance level: 0.5")
+    ax.set_ylim([0, 1.05])
+    ax.set_ylabel(metric_name)
+    ax.set_title(title)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=2, frameon=False)
+
+
+# =============================================================================
+# B3_N4: ComBat with site-class imbalance
+# =============================================================================
+PIPELINES = [
+    "No harmonization",
+    "ComBat, target not protected",
+    "ComBat, target protected [leak]",
+    "ComBat fitted on all data [leak]",
+]
+
+
+def cross_validate_pipeline(pipeline, X, y, sites, clf, cv):
+    """Cross-validate a classifier after harmonizing the data with one of PIPELINES.
+
+    In every fold: (1) harmonize the training and test subjects, (2) train the
+    classifier on the harmonized training subjects, (3) predict the test subjects.
+
+    Returns
+    -------
+    proba : array
+        Out-of-fold probability of Class 1 for every subject.
+    X_harmonized : array
+        Out-of-fold harmonized features (what the classifier saw for each test subject).
+    """
+    proba = np.zeros(len(y))
+    X_harmonized = np.zeros(X.shape)
+    y_column = y.reshape(-1, 1)  # ComBat expects covariates as a column
+
+    if pipeline == "ComBat fitted on all data [leak]":
+        # A common mistake, made on purpose: harmonize ALL subjects once, with ALL
+        # their labels as covariate, and only then split into folds. The test
+        # subjects' labels have been used to build their features.
+        X_all = NeuroComBat().fit_transform(X, sites, categorical_covariates=y_column)
+
+    for train, test in cv.split(X, y):
+        if pipeline == "No harmonization":
+            X_train, X_test = X[train], X[test]
+
+        elif pipeline == "ComBat, target not protected":
+            # Learn the site effects on the training subjects only...
+            combat = NeuroComBat().fit(X[train], sites[train])
+            # ...and remove them from training and test subjects. Only the site of
+            # each subject is needed, so no label is used.
+            X_train = combat.transform(X[train], sites[train])
+            X_test = combat.transform(X[test], sites[test])
+
+        elif pipeline == "ComBat, target protected [leak]":
+            # Pass the class as a covariate so that ComBat keeps the class difference.
+            combat = NeuroComBat().fit(
+                X[train], sites[train], categorical_covariates=y_column[train]
+            )
+            X_train = combat.transform(
+                X[train], sites[train], categorical_covariates=y_column[train]
+            )
+            # LEAK: ComBat also needs the covariate to transform the test subjects,
+            # i.e. their true labels, which are unknown in a real application.
+            X_test = combat.transform(
+                X[test], sites[test], categorical_covariates=y_column[test]
+            )
+
+        elif pipeline == "ComBat fitted on all data [leak]":
+            X_train, X_test = X_all[train], X_all[test]
+
+        else:
+            raise ValueError(f"Unknown pipeline: {pipeline}. Choose from {PIPELINES}")
+
+        model = clone(clf).fit(X_train, y[train])
+        proba[test] = model.predict_proba(X_test)[:, 1]
+        X_harmonized[test] = X_test
+
+    return proba, X_harmonized
+
+
+def auc_table(proba_per_pipeline, y, sites, scenario, seed):
+    """One row per pipeline: AUC over all subjects (pooled) and AUC in each site.
+
+    The per-site AUCs use the same predictions (one model trained on all sites);
+    they are only computed on each site's subjects, and never averaged.
+    """
+    rows = []
+    for pipeline, proba in proba_per_pipeline.items():
+        row = {
+            "Scenario": scenario,
+            "Pipeline": pipeline,
+            "seed": seed,
+            "pooled_auc": roc_auc_score(y, proba),
+        }
+        for s in np.unique(sites):
+            in_site = sites == s
+            row[f"site_{s}_auc"] = roc_auc_score(y[in_site], proba[in_site])
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def run_harmonization_scenario(
+    title,
+    n_samples,
+    clf,
+    cv,
+    random_state,
+    n_seeds=20,
+    pipelines=PIPELINES,
+    n_sites=2,
+    n_features=2,
+    plot=True,
+    **sim_kwargs,
+):
+    """One B3_N4 scenario: compare the pipelines on an example dataset, then over seeds.
+
+    Extra keyword arguments (signal_strength, site_effect_strength,
+    site_effect_type, balance_per_site, ...) go to make_multisite_classification.
+    Returns one row per seed and pipeline (see ``auc_table``).
+    """
+    # 1. Simulate the example dataset and print how many subjects of each class each site has.
+    X, y, sites = make_multisite_classification(
+        n_samples=n_samples,
+        n_sites=n_sites,
+        n_features=n_features,
+        signal_type="blobs",
+        random_state=random_state,
+        **sim_kwargs,
+    )
+    counts = ", ".join(
+        f"Site {s}: {np.sum(y[sites == s] == 0)} / {np.sum(y[sites == s] == 1)}"
+        for s in np.unique(sites)
+    )
+    print(f"Subjects per site (Class 0 / Class 1): {counts}")
+
+    # 2. Run every pipeline on the example dataset.
+    results = {p: cross_validate_pipeline(p, X, y, sites, clf, cv) for p in pipelines}
+    example = auc_table(
+        {p: proba for p, (proba, _) in results.items()}, y, sites, title, random_state
+    )
+    print(f"Example dataset (random_state={random_state}), out-of-fold AUC:")
+    print(
+        example.drop(columns=["Scenario", "seed"])
+        .set_index("Pipeline")
+        .round(3)
+        .to_string()
+    )
+
+    # 3. Plot the harmonized test features of each pipeline (2-feature data only).
+    if plot and n_features == 2:
+        fig, axes = plt.subplots(
+            1,
+            len(pipelines),
+            figsize=(6.5 * len(pipelines), 6.5),
+            sharex=True,
+            sharey=True,
+        )
+        for ax, (pipeline, (proba, X_harmonized)), row in zip(
+            np.atleast_1d(axes), results.items(), example.itertuples()
+        ):
+            site_aucs = " | ".join(
+                f"Site {s} {getattr(row, f'site_{s}_auc'):.3f}"
+                for s in np.unique(sites)
+            )
+            name = pipeline.replace(", ", ",\n", 1)  # break long names over two lines
+            plot_scenario(
+                ax,
+                X_harmonized,
+                y,
+                sites,
+                f"{name}\npooled AUC {row.pooled_auc:.3f} | {site_aucs}",
+                clf=clone(clf).fit(X_harmonized, y),  # boundary for the picture only
+                fontsize=12,
+            )
+        fig.suptitle(title, fontsize=15, fontweight="bold")
+        plt.tight_layout()
+        plt.show()
+
+    # 4. Repeat on other random datasets (seeds 0, 1, ...) to see how stable the results are.
+    tables = []
+    for seed in range(n_seeds):
+        Xs, ys, ss = make_multisite_classification(
+            n_samples=n_samples,
+            n_sites=n_sites,
+            n_features=n_features,
+            signal_type="blobs",
+            random_state=seed,
+            **sim_kwargs,
+        )
+        proba_per_pipeline = {
+            p: cross_validate_pipeline(p, Xs, ys, ss, clf, cv)[0] for p in pipelines
+        }
+        tables.append(auc_table(proba_per_pipeline, ys, ss, title, seed))
+    return pd.concat(tables, ignore_index=True)
+
+
+def plot_pipeline_auc(results, title=None):
+    """Dot plot: mean ± SD over seeds of the pooled AUC and of the AUC in each site."""
+    auc_columns = [
+        c for c in results.columns if c.endswith("_auc")
+    ]  # pooled + one per site
+    summary = results.groupby("Pipeline", sort=False)[auc_columns].agg(["mean", "std"])
+
+    _, ax = plt.subplots(figsize=(10, 0.8 * len(summary) + 2))
+    y_positions = np.arange(len(summary))
+    offsets = np.linspace(
+        -0.2, 0.2, len(auc_columns)
+    )  # small vertical shift per metric
+    for column, offset in zip(auc_columns, offsets):
+        label = (
+            "pooled AUC"
+            if column == "pooled_auc"
+            else f"AUC in Site {column.split('_')[1]}"
+        )
+        ax.errorbar(
+            summary[(column, "mean")],
+            y_positions + offset,
+            xerr=summary[(column, "std")],
+            fmt="o",
+            capsize=3,
+            label=label,
+        )
+    ax.axvline(0.5, color="black", linestyle="--", linewidth=1)  # chance level
+    ax.set_yticks(y_positions, summary.index)
+    ax.invert_yaxis()
+    ax.set_xlim(0.2, 1.0)
+    ax.set_xlabel(
+        f"Cross-validated AUC (mean ± SD over {results.seed.nunique()} datasets)"
+    )
+    if title:
+        ax.set_title(title, fontweight="bold")
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.18),
+        ncol=len(auc_columns),
+        frameon=False,
+    )
+    plt.tight_layout()
+    return ax
+
+
+# =============================================================================
+# B3_N1 (alternative version) helpers
 # =============================================================================
 def simulate_multisite_data_with_covariates(n_samples, n_features):
 
@@ -202,720 +679,3 @@ def run_fpr_simulation(seed, n=800, n_features=20):
     corr_scanner_group = np.corrcoef(scanner_num, group)[0, 1]
 
     return pvals, corr_scanner_age, corr_scanner_group
-
-
-# =============================================================================
-# Shared helpers (B3_N2, B3_N3, B3_N4)
-# =============================================================================
-def simulate_classification(
-    n_samples, random_state, n_sites=3, n_features=2, signal_type="blobs", **sim_kwargs
-):
-    """Simulate a multi-site classification problem with uniharmony.
-
-    Thin wrapper around ``make_multisite_classification`` so that every notebook
-    simulates data in the same way. Extra keyword arguments (``signal_strength``,
-    ``site_effect_strength``, ``site_effect_type``, ``balance_per_site``, ...) are
-    passed through unchanged.
-
-    Note: ``balance_per_site`` is ``[proportion of Class 0, proportion of Class 1]``
-    for each site, e.g. ``[[0.1, 0.9], [0.9, 0.1]]``. A flat list such as
-    ``[0.1, 0.9]`` is applied to *every* site, so it creates no site-class imbalance.
-    """
-    return make_multisite_classification(
-        n_samples=n_samples,
-        n_sites=n_sites,
-        n_features=n_features,
-        signal_type=signal_type,
-        random_state=random_state,
-        **sim_kwargs,
-    )
-
-
-def cross_validated_auc(X, y, clf, cv):
-    """Mean AUC over the cross-validation folds."""
-    return float(cross_val_score(clf, X, y, cv=cv, scoring="roc_auc").mean())
-
-
-def site_auc(y, scores, sites):
-    """AUC of one (pooled) model's scores, computed on the subjects of each site.
-
-    No model is trained per site: the same scores are only *evaluated* per site.
-    This is a narrow diagnostic. It ignores a site effect only when the effect is a
-    pure location shift (same shift for every subject of a site), it does not carry
-    over to threshold metrics (accuracy, sensitivity, ...), and it is noisy for
-    sites with few subjects of one class. See the limitations section of B3_N3.
-    """
-    return {
-        s: roc_auc_score(y[sites == s], scores[sites == s]) for s in np.unique(sites)
-    }
-
-
-def plot_scenario(ax, X, y, sites, title, clf=None, fontsize=13):
-    """Scatter the first two features (colour = site, marker = class).
-
-    If a fitted 2-feature classifier is given, its decision boundary is drawn.
-    """
-    site_names = [f"Site {s}" for s in np.unique(sites)]
-    df = pd.DataFrame(
-        {
-            "Feature 1": X[:, 0],
-            "Feature 2": X[:, 1],
-            "Class": [f"Class {c}" for c in y],
-            "Site": [f"Site {s}" for s in sites],
-        }
-    )
-    sns.scatterplot(
-        data=df,
-        x="Feature 1",
-        y="Feature 2",
-        hue="Site",
-        style="Class",
-        s=100,
-        alpha=0.7,
-        ax=ax,
-        hue_order=site_names,
-        style_order=["Class 0", "Class 1"],
-    )
-    ax.set_title(title, fontsize=fontsize, fontweight="bold")
-    if clf is not None and X.shape[1] == 2:
-        plot_decision_boundary_2d(ax, clf)
-
-
-def summarize_seed_results(results, by="Scenario"):
-    """Combine the per-seed results of several scenarios into one summary table.
-
-    Parameters
-    ----------
-    results : list of pandas.DataFrame or pandas.DataFrame
-        Outputs of ``run_classification_scenario``, ``run_metrics_by_site_scenario``
-        or ``run_harmonization_scenario`` (one row per seed).
-    by : str or list of str
-        Column(s) that identify a scenario (and a pipeline, for B3_N4).
-
-    Returns
-    -------
-    pandas.DataFrame
-        Mean, SD, min and max of every metric, in the order the scenarios were run.
-    """
-    if not isinstance(results, (list, tuple)):
-        results = [results]
-    frames = []
-    for r in results:
-        frame = r.copy()
-        frame.attrs = {}  # the plotted example is not part of the summary
-        frames.append(frame)
-    df = pd.concat(frames, ignore_index=True)
-    by = [by] if isinstance(by, str) else list(by)
-    metrics = [c for c in df.columns if c not in by + ["seed"]]
-    return (
-        df.groupby(by, sort=False)[metrics].agg(["mean", "std", "min", "max"]).round(3)
-    )
-
-
-# =============================================================================
-# B3_N2: effects of site in ML pipelines
-# =============================================================================
-def seed_summary(
-    n_samples,
-    clf,
-    cv,
-    n_seeds,
-    title,
-    n_sites=3,
-    n_features=2,
-    signal_type="blobs",
-    **sim_kwargs,
-):
-    """Repeat one scenario with ``n_seeds`` different random datasets.
-
-    Returns one row per seed with the mean cross-validated AUC.
-    """
-    rows = []
-    for seed in range(n_seeds):
-        X, y, _ = simulate_classification(
-            n_samples, seed, n_sites, n_features, signal_type, **sim_kwargs
-        )
-        rows.append(
-            {"Scenario": title, "seed": seed, "auc": cross_validated_auc(X, y, clf, cv)}
-        )
-    return pd.DataFrame(rows)
-
-
-def run_classification_scenario(
-    title,
-    n_samples,
-    clf,
-    cv,
-    random_state,
-    n_seeds=20,
-    n_sites=3,
-    n_features=2,
-    signal_type="blobs",
-    verbose=True,
-    **sim_kwargs,
-):
-    """Simulate, evaluate with CV and plot one scenario, then repeat it over seeds.
-
-    The dataset drawn with ``random_state`` is plotted and evaluated; the same
-    scenario is then simulated with seeds ``0 ... n_seeds - 1`` to show how much
-    the result depends on the particular dataset.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per seed (see ``seed_summary``). The AUC of the plotted example is
-        stored in ``results.attrs["example"]``. Pass a list of these tables to
-        ``summarize_seed_results`` to build the final table of the notebook.
-    """
-    X, y, sites = simulate_classification(
-        n_samples, random_state, n_sites, n_features, signal_type, **sim_kwargs
-    )
-    auc = cross_validated_auc(X, y, clf, cv)
-
-    _, ax = plt.subplots(figsize=(10, 8))
-    plot_scenario(
-        ax,
-        X,
-        y,
-        sites,
-        f"{title}\nMean CV AUC for example dataset (random_state={random_state}): {auc:.3f}",
-        clf=clone(clf).fit(X, y),  # decision boundary for visualization only
-        fontsize=14,
-    )
-    plt.tight_layout()
-    plt.show()
-
-    results = seed_summary(
-        n_samples,
-        clf,
-        cv,
-        n_seeds,
-        title,
-        n_sites,
-        n_features,
-        signal_type,
-        **sim_kwargs,
-    )
-    results.attrs["example"] = {"random_state": random_state, "auc": auc}
-
-    if verbose:
-        print(
-            f"Across {n_seeds} other datasets: "
-            f"AUC {results.auc.mean():.3f} [{results.auc.min():.3f}-{results.auc.max():.3f}]"
-        )
-    return results
-
-
-# =============================================================================
-# B3_N3: metrics by site
-# =============================================================================
-def make_good_and_bad_sites(
-    n_samples_per_site, bad_sites, signal_strength=1.0, n_features=10, random_state=None
-):
-    """Simulate sites with ("good") and without ("bad") a feature-class relationship.
-
-    All sites come from one generative problem without effects of site, so the
-    feature distributions are the same everywhere. In the bad sites the class
-    labels are shuffled: the features carry no information about the class there
-    (think of unreliable labels or unusable scans).
-
-    Parameters
-    ----------
-    n_samples_per_site : list of int
-        Number of subjects in each site.
-    bad_sites : list of int
-        Indices of the sites without signal (empty list = all sites good).
-    """
-    X, y, sites = make_multisite_classification(
-        n_sites=len(n_samples_per_site),
-        n_samples=list(n_samples_per_site),
-        n_features=n_features,
-        signal_type="linear",
-        signal_strength=signal_strength,
-        site_effect_strength=0,  # no effects of site
-        random_state=random_state,
-    )
-    rng = np.random.default_rng(random_state)
-    y = y.copy()
-    for s in bad_sites:
-        idx = np.flatnonzero(sites == s)
-        y[idx] = rng.permutation(y[idx])
-    return X, y, sites
-
-
-def metrics_by_site(X, y, sites, clf, cv, metrics):
-    """Cross-validated metrics, overall and per site.
-
-    The model is always trained on subjects from all sites; only the metric is
-    computed separately per site. The predicted probabilities are passed to
-    ``report_metrics_by_site``: AUC is computed from them, and metrics that need
-    class labels (accuracy, sensitivity, balanced accuracy, ...) threshold them at 0.5.
-    """
-    proba = cross_val_predict(clf, X, y, cv=cv, method="predict_proba")[:, 1]
-    return report_metrics_by_site(y, proba, sites, metrics)
-
-
-def specificity_score(y_true, y_pred):
-    """Specificity = recall of Class 0 (true negative rate)."""
-    return recall_score(y_true, y_pred, pos_label=0)
-
-
-def class_counts_by_site(y, sites):
-    """{site: (n Class 0, n Class 1)}."""
-    return {
-        s: (int(np.sum(y[sites == s] == 0)), int(np.sum(y[sites == s] == 1)))
-        for s in np.unique(sites)
-    }
-
-
-def plot_metrics_by_site(
-    ax, results, metric_name, n_per_site, title, color="steelblue"
-):
-    """Bar plot of a metric per site, labelled with the number of subjects, and the overall value.
-
-    No average across sites is drawn: an unweighted average gives a site of 20
-    subjects the same weight as a site of 1000 (see the limitations section).
-    """
-    scores = results[metric_name]
-    site_ids = [s for s in scores if s != "overall"]
-    values = [scores[s] for s in site_ids]
-    labels = [f"Site {s}\n(n={n_per_site[s]})" for s in site_ids]
-
-    sns.barplot(x=labels, y=values, color=color, ax=ax)
-    ax.bar_label(ax.containers[0], fmt="%.2f", padding=3)
-    ax.axhline(
-        scores["overall"],
-        color="black",
-        linestyle="--",
-        label=f"Overall (all subjects): {scores['overall']:.3f}",
-    )
-    ax.axhline(0.5, color="red", linestyle="--", alpha=0.7, label="Chance level: 0.5")
-    ax.set_ylim([0, 1.05])
-    ax.set_ylabel(metric_name)
-    ax.set_title(title)
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=2, frameon=False)
-
-
-def run_metrics_by_site_scenario(
-    title,
-    n_samples_per_site,
-    bad_sites,
-    clf,
-    cv,
-    random_state,
-    metrics,
-    signal_strength=1.0,
-    n_features=10,
-    n_seeds=20,
-    summary_metric=roc_auc_score,
-):
-    """Evaluate one good/bad-sites scenario and repeat it over seeds.
-
-    Returns
-    -------
-    results : dict
-        ``report_metrics_by_site`` output for the example dataset (``random_state``).
-    n_per_site : dict
-        Number of subjects per site.
-    seed_results : pandas.DataFrame
-        One row per seed with the overall value and the value in each site for
-        ``summary_metric`` (no average across sites).
-    """
-    X, y, sites = make_good_and_bad_sites(
-        n_samples_per_site, bad_sites, signal_strength, n_features, random_state
-    )
-    results = metrics_by_site(X, y, sites, clf, cv, metrics)
-    n_per_site = {s: int(np.sum(sites == s)) for s in np.unique(sites)}
-
-    rows = []
-    name = summary_metric.__name__
-    for seed in range(n_seeds):
-        Xs, ys, ss = make_good_and_bad_sites(
-            n_samples_per_site, bad_sites, signal_strength, n_features, seed
-        )
-        r = metrics_by_site(Xs, ys, ss, clf, cv, [summary_metric])[name]
-        row = {"Scenario": title, "seed": seed, "overall": r["overall"]}
-        row.update({f"site_{k}": v for k, v in r.items() if k != "overall"})
-        rows.append(row)
-    return results, n_per_site, pd.DataFrame(rows)
-
-
-# ---- B3_N3 limitations ------------------------------------------------------
-def site_size_experiment(
-    n_samples_per_site, clf, cv, n_datasets=100, signal_strength=0.5, n_features=10
-):
-    """Per-site AUC when sites differ in size, over many random datasets.
-
-    All sites come from the same problem (no bad sites, no effects of site), so
-    every site has the same true AUC. Any difference between sites is sampling noise.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per dataset: overall AUC, AUC of each site, and the unweighted
-        mean of the site AUCs.
-    """
-    rows = []
-    for seed in range(n_datasets):
-        X, y, sites = make_good_and_bad_sites(
-            n_samples_per_site, [], signal_strength, n_features, seed
-        )
-        proba = cross_val_predict(clf, X, y, cv=cv, method="predict_proba")[:, 1]
-        per_site = site_auc(y, proba, sites)
-        row = {"seed": seed, "overall": roc_auc_score(y, proba)}
-        row.update(
-            {f"Site {s} (n={n})": per_site[s] for s, n in enumerate(n_samples_per_site)}
-        )
-        row["mean of sites (unweighted)"] = float(np.mean(list(per_site.values())))
-        rows.append(row)
-    return pd.DataFrame(rows)
-
-
-def plot_site_size_experiment(df, ax=None):
-    """Box plot of (site AUC - overall AUC) and (mean of sites - overall AUC) per dataset."""
-    cols = [c for c in df.columns if c not in ("seed", "overall")]
-    diff = (
-        df[cols]
-        .sub(df["overall"], axis=0)
-        .melt(var_name="", value_name="AUC minus overall AUC")
-    )
-    if ax is None:
-        _, ax = plt.subplots(figsize=(10, 5))
-    sns.boxplot(
-        data=diff, x="", y="AUC minus overall AUC", ax=ax, color="lightsteelblue"
-    )
-    ax.axhline(0, color="black", linestyle="--", linewidth=1)
-    ax.set_title(
-        f"Difference from the overall AUC over {len(df)} datasets (same true AUC in every site)"
-    )
-    plt.tight_layout()
-    return ax
-
-
-def metrics_table_by_site(X, y, sites, clf, cv, threshold=0.5):
-    """Overall and per-site AUC and threshold metrics of one pooled model, with class counts.
-
-    The model is trained on all sites (out-of-fold probabilities from cv). AUC
-    uses the probabilities; the other metrics use the predicted class
-    (probability >= threshold).
-    """
-    proba = cross_val_predict(clf, X, y, cv=cv, method="predict_proba")[:, 1]
-    y_pred = (proba >= threshold).astype(int)
-    groups = [("Overall", np.ones(len(y), dtype=bool))] + [
-        (f"Site {s}", sites == s) for s in np.unique(sites)
-    ]
-    rows = []
-    for name, m in groups:
-        rows.append(
-            {
-                "": name,
-                "n Class 0": int(np.sum(y[m] == 0)),
-                "n Class 1": int(np.sum(y[m] == 1)),
-                "AUC": roc_auc_score(y[m], proba[m]),
-                "Accuracy": accuracy_score(y[m], y_pred[m]),
-                "Sensitivity": recall_score(y[m], y_pred[m]),
-                "Specificity": specificity_score(y[m], y_pred[m]),
-                "Balanced accuracy": balanced_accuracy_score(y[m], y_pred[m]),
-            }
-        )
-    return pd.DataFrame(rows).set_index("").round(3)
-
-
-def auc_under_site_effects(random_state=42, n_samples=600, plot=True):
-    """Which site effects leave the AUC *inside one site* unchanged?
-
-    A model is trained on half of a one-site dataset without effects of site. The
-    other half (the test site) is then distorted in different ways and scored with
-    the same, unchanged model. A pure location shift moves every score by the same
-    amount, so the ranking (and the AUC) stays identical; other effects change it.
-
-    Returns
-    -------
-    pandas.DataFrame
-        AUC of the fixed model on the test site after each distortion.
-    """
-    X, y, _ = simulate_classification(
-        n_samples, random_state, n_sites=1, signal_strength=2, site_effect_strength=0
-    )
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.5, stratify=y, random_state=random_state
-    )
-    model = clone(LogisticRegression()).fit(X_train, y_train)
-    rng = np.random.default_rng(random_state)
-    effects = {
-        "No site effect": X_test,
-        "Location: same shift for every subject": X_test + np.array([3.0, -2.0]),
-        "Scale: each feature multiplied differently": X_test * np.array([3.0, 0.3]),
-        "Location varying across subjects": X_test + rng.normal(0, 1.5, X_test.shape),
-        "Nonlinear: x + 0.3 x²": X_test + 0.3 * X_test**2,
-    }
-    table = pd.DataFrame(
-        {
-            "AUC (same model)": {
-                k: roc_auc_score(y_test, model.decision_function(v))
-                for k, v in effects.items()
-            }
-        }
-    ).round(3)
-
-    if plot:
-        fig, axes = plt.subplots(1, len(effects), figsize=(5 * len(effects), 5))
-        for ax, (name, Xe) in zip(axes, effects.items()):
-            plot_scenario(
-                ax,
-                Xe,
-                y_test,
-                np.zeros(len(y_test), dtype=int),
-                f"{name.split(':')[0]}\nAUC {table.loc[name, 'AUC (same model)']:.3f}",
-                clf=model,
-                fontsize=11,
-            )
-            ax.get_legend().remove()
-        plt.tight_layout()
-        plt.show()
-    return table
-
-
-# =============================================================================
-# B3_N4: ComBat with site-class imbalance
-# =============================================================================
-HARMONIZATION_PIPELINES = {
-    "raw": "No harmonization",
-    "combat": "ComBat, target not protected",
-    "combat_target_test_labels": "ComBat, target protected, test labels used [leak]",
-    "combat_target_no_test_labels": "ComBat, target protected, test labels not used",
-    "combat_target_all_data": "ComBat fitted on all data, target protected [leak]",
-}
-
-
-def evaluate_harmonization_pipelines(X, y, sites, clf, cv, pipelines=None):
-    """Cross-validate a classifier after different ways of applying ComBat.
-
-    In every fold ComBat is fitted on the training subjects only, except for
-    ``"combat_target_all_data"``, the common mistake of harmonizing the whole
-    dataset before cross-validation.
-
-    Pipelines (keys of ``HARMONIZATION_PIPELINES``):
-
-    - ``raw``: no harmonization.
-    - ``combat``: ComBat without covariates; the target is not protected.
-    - ``combat_target_test_labels``: target protected; test subjects are
-      transformed with their true labels [leak: unknown in a real application].
-    - ``combat_target_no_test_labels``: target protected; test subjects are
-      transformed with the target set to the training proportion of Class 1,
-      so no test label is used.
-    - ``combat_target_all_data``: ComBat fitted on all subjects with their
-      labels before the CV split [leak].
-
-    The target is passed as a *continuous* covariate. For a 0/1 variable this
-    gives exactly the same design matrix as a categorical covariate, but it lets
-    us transform test subjects with the training proportion (e.g. 0.5) instead of
-    a label.
-
-    Returns
-    -------
-    proba : dict
-        Out-of-fold probabilities of Class 1 for each pipeline.
-    X_harm : dict
-        Out-of-fold harmonized features for each pipeline (each subject is
-        transformed by a model that did not see it, except for the all-data pipeline).
-    """
-    pipelines = list(HARMONIZATION_PIPELINES) if pipelines is None else list(pipelines)
-    proba = {p: np.zeros(len(y)) for p in pipelines}
-    X_harm = {p: np.zeros(X.shape, dtype=float) for p in pipelines}
-    y_col = y.reshape(-1, 1).astype(float)
-
-    if "combat_target_all_data" in pipelines:
-        # LEAK: every subject and every label is used before the CV split.
-        X_all = NeuroComBat().fit_transform(X, sites, continuous_covariates=y_col)
-
-    for train, test in cv.split(X, y):
-
-        def fit_predict(H_train, H_test, key):
-            model = clone(clf).fit(H_train, y[train])
-            proba[key][test] = model.predict_proba(H_test)[:, 1]
-            X_harm[key][test] = H_test
-
-        if "raw" in pipelines:
-            fit_predict(X[train], X[test], "raw")
-
-        if "combat" in pipelines:
-            combat = NeuroComBat().fit(X[train], sites[train])
-            fit_predict(
-                combat.transform(X[train], sites[train]),
-                combat.transform(X[test], sites[test]),
-                "combat",
-            )
-
-        if {"combat_target_test_labels", "combat_target_no_test_labels"} & set(
-            pipelines
-        ):
-            y_train = y_col[train]
-            combat = NeuroComBat().fit(
-                X[train], sites[train], continuous_covariates=y_train
-            )
-            H_train = combat.transform(
-                X[train], sites[train], continuous_covariates=y_train
-            )
-            if "combat_target_test_labels" in pipelines:
-                # LEAK: the true test labels are given to the harmonizer.
-                H_test = combat.transform(
-                    X[test], sites[test], continuous_covariates=y_col[test]
-                )
-                fit_predict(H_train, H_test, "combat_target_test_labels")
-            if "combat_target_no_test_labels" in pipelines:
-                # No test label: every test subject gets the training proportion of Class 1.
-                y_unknown = np.full((len(test), 1), y_train.mean())
-                H_test = combat.transform(
-                    X[test], sites[test], continuous_covariates=y_unknown
-                )
-                fit_predict(H_train, H_test, "combat_target_no_test_labels")
-
-        if "combat_target_all_data" in pipelines:
-            fit_predict(X_all[train], X_all[test], "combat_target_all_data")
-
-    return proba, X_harm
-
-
-def _pipeline_rows(title, seed, y, sites, proba):
-    """Pooled AUC and mean within-site AUC for each pipeline.
-
-    within_site_auc = AUC of the same out-of-fold scores computed on the
-    subjects of each site, averaged over sites (no model is trained per site).
-    In B3_N4 it is only used under the conditions where it is interpretable:
-    AUC, a homogeneous location effect and sites of equal size. See the
-    limitations section of B3_N3.
-    """
-    rows = []
-    for key, p in proba.items():
-        pooled = roc_auc_score(y, p)
-        within = float(np.mean(list(site_auc(y, p, sites).values())))
-        rows.append(
-            {
-                "Scenario": title,
-                "Pipeline": HARMONIZATION_PIPELINES[key],
-                "seed": seed,
-                "pooled_auc": pooled,
-                "within_site_auc": within,
-                "pooled_minus_within": pooled - within,
-            }
-        )
-    return rows
-
-
-def run_harmonization_scenario(
-    title,
-    n_samples,
-    clf,
-    cv,
-    random_state,
-    n_seeds=20,
-    pipelines=None,
-    n_sites=2,
-    n_features=2,
-    signal_type="blobs",
-    plot=True,
-    **sim_kwargs,
-):
-    """Simulate one scenario, compare the ComBat pipelines and repeat over seeds.
-
-    For 2-feature data the out-of-fold harmonized features of the example dataset
-    are plotted, one panel per pipeline.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per seed and pipeline. The example dataset (``random_state``) is in
-        ``results.attrs["example"]``.
-    """
-    X, y, sites = simulate_classification(
-        n_samples, random_state, n_sites, n_features, signal_type, **sim_kwargs
-    )
-    proba, X_harm = evaluate_harmonization_pipelines(X, y, sites, clf, cv, pipelines)
-    example = pd.DataFrame(_pipeline_rows(title, random_state, y, sites, proba))
-
-    if plot and n_features == 2:
-        n_panels = len(proba)
-        fig, axes = plt.subplots(
-            1, n_panels, figsize=(6.5 * n_panels, 6.5), sharex=True, sharey=True
-        )
-        for ax, (key, row) in zip(
-            np.atleast_1d(axes), zip(proba, example.itertuples())
-        ):
-            label = HARMONIZATION_PIPELINES[key].replace(", ", ",\n", 1)
-            plot_scenario(
-                ax,
-                X_harm[key],
-                y,
-                sites,
-                f"{label}\npooled AUC {row.pooled_auc:.3f} | within-site {row.within_site_auc:.3f}",
-                clf=clone(clf).fit(
-                    X_harm[key], y
-                ),  # decision boundary for visualization only
-                fontsize=12,
-            )
-            ax.grid(alpha=0.3, color="black", linestyle="--")
-        fig.suptitle(title, fontsize=15, fontweight="bold")
-        plt.tight_layout()
-        plt.show()
-
-    counts = ", ".join(
-        f"Site {s}: {n0} / {n1}"
-        for s, (n0, n1) in class_counts_by_site(y, sites).items()
-    )
-    print(f"Subjects per site (Class 0 / Class 1): {counts}")
-    print(f"Example dataset (random_state={random_state}), out-of-fold AUC:")
-    print(
-        example.set_index("Pipeline")[["pooled_auc", "within_site_auc"]]
-        .round(3)
-        .to_string()
-    )
-
-    rows = []
-    for seed in range(n_seeds):
-        Xs, ys, ss = simulate_classification(
-            n_samples, seed, n_sites, n_features, signal_type, **sim_kwargs
-        )
-        p, _ = evaluate_harmonization_pipelines(Xs, ys, ss, clf, cv, pipelines)
-        rows += _pipeline_rows(title, seed, ys, ss, p)
-    results = pd.DataFrame(rows)
-    results.attrs["example"] = example.to_dict("records")
-    return results
-
-
-def plot_pipeline_auc(results, title=None, ax=None):
-    """Mean +/- SD across seeds of pooled and within-site AUC for each pipeline."""
-    summary = results.groupby("Pipeline", sort=False)[
-        ["pooled_auc", "within_site_auc"]
-    ].agg(["mean", "std"])
-    if ax is None:
-        _, ax = plt.subplots(figsize=(10, 0.8 * len(summary) + 2))
-    ypos = np.arange(len(summary))
-    for offset, (col, color, label) in zip(
-        (-0.15, 0.15),
-        (
-            ("pooled_auc", "tab:blue", "pooled AUC"),
-            ("within_site_auc", "tab:orange", "mean within-site AUC"),
-        ),
-    ):
-        ax.errorbar(
-            summary[(col, "mean")],
-            ypos + offset,
-            xerr=summary[(col, "std")],
-            fmt="o",
-            color=color,
-            capsize=3,
-            label=label,
-        )
-    ax.axvline(0.5, color="black", linestyle="--", linewidth=1)
-    ax.set_yticks(ypos, summary.index)
-    ax.invert_yaxis()
-    ax.set_xlim(0.2, 1.0)
-    ax.set_xlabel(
-        f"Cross-validated AUC (mean ± SD over {results.seed.nunique()} datasets)"
-    )
-    if title:
-        ax.set_title(title, fontweight="bold")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=2, frameon=False)
-    plt.tight_layout()
-    return ax
