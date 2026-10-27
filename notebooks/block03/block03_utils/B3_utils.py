@@ -4,7 +4,7 @@ Which notebook uses what
 ------------------------
 B3_N2 (effects of site in ML)        -> run_classification_scenario, summarize_seed_results
 B3_N3 (metrics by site)              -> run_metrics_by_site_scenario, plot_metrics_by_site
-B3_N4 (ComBat with class imbalance)  -> run_harmonization_scenario, plot_pipeline_auc,
+B3_N4 (ComBat with class imbalance)  -> run_harmonization_scenario, plot_pipeline_scores,
                                         summarize_seed_results
 B3_N1 (alternative version)          -> simulate_multisite_data_with_covariates, run_fpr_simulation
 
@@ -20,7 +20,7 @@ import pandas as pd
 import seaborn as sns
 from scipy.stats import ttest_ind
 from sklearn.base import clone
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import balanced_accuracy_score
 from sklearn.model_selection import cross_val_predict, cross_val_score
 from uniharmony import verbosity
 from uniharmony.datasets import make_multisite_classification
@@ -357,23 +357,27 @@ def cross_validate_pipeline(pipeline, X, y, sites, clf, cv):
     return proba, X_harmonized
 
 
-def auc_table(proba_per_pipeline, y, sites, scenario, seed):
-    """One row per pipeline: AUC over all subjects (pooled) and AUC in each site.
+def score_table(proba_per_pipeline, y, sites, scenario, seed):
+    """One row per pipeline: balanced accuracy over all subjects and in each site.
 
-    The per-site AUCs use the same predictions (one model trained on all sites);
-    they are only computed on each site's subjects, and never averaged.
+    The classifier predicts Class 1 when its probability is >= 0.5. Balanced
+    accuracy is the mean of sensitivity and specificity, so it depends on where
+    the decision boundary falls, not only on how well the subjects are ranked.
+    The per-site values use the same predictions (one model trained on all
+    sites); they are only computed on each site's subjects, and never averaged.
     """
     rows = []
     for pipeline, proba in proba_per_pipeline.items():
+        y_pred = (proba >= 0.5).astype(int)  # predicted class
         row = {
             "Scenario": scenario,
             "Pipeline": pipeline,
             "seed": seed,
-            "pooled_auc": roc_auc_score(y, proba),
+            "pooled_bacc": balanced_accuracy_score(y, y_pred),
         }
         for s in np.unique(sites):
             in_site = sites == s
-            row[f"site_{s}_auc"] = roc_auc_score(y[in_site], proba[in_site])
+            row[f"site_{s}_bacc"] = balanced_accuracy_score(y[in_site], y_pred[in_site])
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -395,7 +399,7 @@ def run_harmonization_scenario(
 
     Extra keyword arguments (signal_strength, site_effect_strength,
     site_effect_type, balance_per_site, ...) go to make_multisite_classification.
-    Returns one row per seed and pipeline (see ``auc_table``).
+    Returns one row per seed and pipeline (see ``score_table``).
     """
     # 1. Simulate the example dataset and print how many subjects of each class each site has.
     X, y, sites = make_multisite_classification(
@@ -414,10 +418,10 @@ def run_harmonization_scenario(
 
     # 2. Run every pipeline on the example dataset.
     results = {p: cross_validate_pipeline(p, X, y, sites, clf, cv) for p in pipelines}
-    example = auc_table(
+    example = score_table(
         {p: proba for p, (proba, _) in results.items()}, y, sites, title, random_state
     )
-    print(f"Example dataset (random_state={random_state}), out-of-fold AUC:")
+    print(f"Example dataset (random_state={random_state}), balanced accuracy:")
     print(
         example.drop(columns=["Scenario", "seed"])
         .set_index("Pipeline")
@@ -426,6 +430,7 @@ def run_harmonization_scenario(
     )
 
     # 3. Plot the harmonized test features of each pipeline (2-feature data only).
+    #    The line is the decision boundary of a classifier fitted on these features.
     if plot and n_features == 2:
         fig, axes = plt.subplots(
             1,
@@ -437,8 +442,8 @@ def run_harmonization_scenario(
         for ax, (pipeline, (proba, X_harmonized)), row in zip(
             np.atleast_1d(axes), results.items(), example.itertuples()
         ):
-            site_aucs = " | ".join(
-                f"Site {s} {getattr(row, f'site_{s}_auc'):.3f}"
+            site_scores = " | ".join(
+                f"Site {s} {getattr(row, f'site_{s}_bacc'):.3f}"
                 for s in np.unique(sites)
             )
             name = pipeline.replace(", ", ",\n", 1)  # break long names over two lines
@@ -447,7 +452,7 @@ def run_harmonization_scenario(
                 X_harmonized,
                 y,
                 sites,
-                f"{name}\npooled AUC {row.pooled_auc:.3f} | {site_aucs}",
+                f"{name}\nbACC pooled {row.pooled_bacc:.3f} | {site_scores}",
                 clf=clone(clf).fit(X_harmonized, y),  # boundary for the picture only
                 fontsize=12,
             )
@@ -469,51 +474,43 @@ def run_harmonization_scenario(
         proba_per_pipeline = {
             p: cross_validate_pipeline(p, Xs, ys, ss, clf, cv)[0] for p in pipelines
         }
-        tables.append(auc_table(proba_per_pipeline, ys, ss, title, seed))
+        tables.append(score_table(proba_per_pipeline, ys, ss, title, seed))
     return pd.concat(tables, ignore_index=True)
 
 
-def plot_pipeline_auc(results, title=None):
-    """Dot plot: mean ± SD over seeds of the pooled AUC and of the AUC in each site."""
-    auc_columns = [
-        c for c in results.columns if c.endswith("_auc")
-    ]  # pooled + one per site
-    summary = results.groupby("Pipeline", sort=False)[auc_columns].agg(["mean", "std"])
+def plot_pipeline_scores(results, title=None):
+    """Box plots over seeds: balanced accuracy of each pipeline, pooled and in each site."""
+    # Long format: one row per (seed, pipeline, evaluated group).
+    score_columns = [c for c in results.columns if c.endswith("_bacc")]
+    long = results.melt(
+        id_vars=["Pipeline", "seed"],
+        value_vars=score_columns,
+        var_name="Evaluated on",
+        value_name="Balanced accuracy",
+    )
+    long["Evaluated on"] = long["Evaluated on"].map(
+        lambda c: "All subjects (pooled)" if c == "pooled_bacc" else f"Site {c.split('_')[1]}"
+    )
+    # Break the long pipeline names so they fit under the boxes.
+    long["Pipeline"] = long["Pipeline"].str.replace(", ", ",\n", regex=False)
 
-    _, ax = plt.subplots(figsize=(10, 0.8 * len(summary) + 2))
-    y_positions = np.arange(len(summary))
-    offsets = np.linspace(
-        -0.2, 0.2, len(auc_columns)
-    )  # small vertical shift per metric
-    for column, offset in zip(auc_columns, offsets):
-        label = (
-            "pooled AUC"
-            if column == "pooled_auc"
-            else f"AUC in Site {column.split('_')[1]}"
-        )
-        ax.errorbar(
-            summary[(column, "mean")],
-            y_positions + offset,
-            xerr=summary[(column, "std")],
-            fmt="o",
-            capsize=3,
-            label=label,
-        )
-    ax.axvline(0.5, color="black", linestyle="--", linewidth=1)  # chance level
-    ax.set_yticks(y_positions, summary.index)
-    ax.invert_yaxis()
-    ax.set_xlim(0.2, 1.0)
-    ax.set_xlabel(
-        f"Cross-validated AUC (mean ± SD over {results.seed.nunique()} datasets)"
+    # Same colours as the scatter plots: Site 0 blue, Site 1 orange, ...; pooled in grey.
+    groups = long["Evaluated on"].unique()
+    palette = {g: "0.6" if g.startswith("All") else sns.color_palette()[int(g.split()[-1])]
+               for g in groups}
+
+    _, ax = plt.subplots(figsize=(12, 6))
+    sns.boxplot(data=long, x="Pipeline", y="Balanced accuracy", hue="Evaluated on",
+                palette=palette, ax=ax)
+    ax.axhline(0.5, color="black", linestyle="--", linewidth=1)  # chance level
+    ax.set_ylim(0.2, 1.0)
+    ax.set_xlabel("")
+    n_seeds = results.seed.nunique()
+    ax.set_title(
+        title or f"Balanced accuracy over {n_seeds} datasets", fontweight="bold"
     )
-    if title:
-        ax.set_title(title, fontweight="bold")
-    ax.legend(
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.18),
-        ncol=len(auc_columns),
-        frameon=False,
-    )
+    ax.legend(title="Evaluated on", loc="upper center", bbox_to_anchor=(0.5, -0.15),
+              ncol=len(score_columns), frameon=False)
     plt.tight_layout()
     return ax
 
