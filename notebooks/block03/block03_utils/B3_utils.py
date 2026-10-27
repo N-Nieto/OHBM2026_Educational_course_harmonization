@@ -489,19 +489,29 @@ def plot_pipeline_scores(results, title=None):
         value_name="Balanced accuracy",
     )
     long["Evaluated on"] = long["Evaluated on"].map(
-        lambda c: "All subjects (pooled)" if c == "pooled_bacc" else f"Site {c.split('_')[1]}"
+        lambda c: (
+            "All subjects (pooled)" if c == "pooled_bacc" else f"Site {c.split('_')[1]}"
+        )
     )
     # Break the long pipeline names so they fit under the boxes.
     long["Pipeline"] = long["Pipeline"].str.replace(", ", ",\n", regex=False)
 
     # Same colours as the scatter plots: Site 0 blue, Site 1 orange, ...; pooled in grey.
     groups = long["Evaluated on"].unique()
-    palette = {g: "0.6" if g.startswith("All") else sns.color_palette()[int(g.split()[-1])]
-               for g in groups}
+    palette = {
+        g: "0.6" if g.startswith("All") else sns.color_palette()[int(g.split()[-1])]
+        for g in groups
+    }
 
     _, ax = plt.subplots(figsize=(12, 6))
-    sns.boxplot(data=long, x="Pipeline", y="Balanced accuracy", hue="Evaluated on",
-                palette=palette, ax=ax)
+    sns.boxplot(
+        data=long,
+        x="Pipeline",
+        y="Balanced accuracy",
+        hue="Evaluated on",
+        palette=palette,
+        ax=ax,
+    )
     ax.axhline(0.5, color="black", linestyle="--", linewidth=1)  # chance level
     ax.set_ylim(0.2, 1.0)
     ax.set_xlabel("")
@@ -509,8 +519,13 @@ def plot_pipeline_scores(results, title=None):
     ax.set_title(
         title or f"Balanced accuracy over {n_seeds} datasets", fontweight="bold"
     )
-    ax.legend(title="Evaluated on", loc="upper center", bbox_to_anchor=(0.5, -0.15),
-              ncol=len(score_columns), frameon=False)
+    ax.legend(
+        title="Evaluated on",
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=len(score_columns),
+        frameon=False,
+    )
     plt.tight_layout()
     return ax
 

@@ -6,7 +6,7 @@ With site-class imbalance, each site is mostly one class: Site 0 is 90% Class 1 
 
 What happens to each pipeline:
 
-- **No harmonization.** The model can now use two sources of information: the real signal and the site shift  as a shortcut. The pooled balanced accuracy goes **up**, because recognizing the site already predicts most of the labels (shortcut learning, as in B3_N2). Inside each site, however, the site shift does not help, and the decision boundary is no longer placed for the real signal, so the balanced accuracy in each site goes **down**. Pooled and per-site values disagree: a warning sign.
+- **No harmonization.** The model can now use two sources of information: the real signal and the site shift (as a shortcut). The pooled balanced accuracy goes **up**, because recognizing the site already predicts most of the labels (shortcut learning, as in B3_N2). Inside each site, however, the site shift does not help, and the decision boundary is no longer placed for the real signal, so the balanced accuracy in each site goes **down**. Pooled and per-site values disagree: a warning sign.
 
 - **ComBat, target not protected.** ComBat removes the difference between the sites. It cannot tell which part comes from the scanner and which part comes from the classes, so it removes both: the EoS **and** the real signal. The result is the same as in Section 1 without EoS. The sites are moved on top of each other, and the decision boundary crosses the middle of each site.
 
